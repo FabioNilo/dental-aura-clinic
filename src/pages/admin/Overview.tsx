@@ -8,6 +8,9 @@ import {
   Package,
   CheckCircle,
   Sparkles,
+  Clock,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -18,107 +21,42 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import {
+  useTotalPacientes,
+  useConsultasHoje,
+  useAgendamentosIA,
+  useEncaminhamentosUrgentes,
+  useChartData,
+  useAtividadesRecentes,
+  useProximosAgendamentos,
+} from "@/hooks/useOverviewData";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
-const chartData = [
-  { day: "SEG", value: 18 },
-  { day: "TER", value: 26 },
-  { day: "QUA", value: 22 },
-  { day: "QUI", value: 28 },
-  { day: "SEX", value: 24 },
-  { day: "SAB", value: 12 },
-  { day: "DOM", value: 4 },
-];
+const activityIcons: Record<string, { icon: typeof CheckCircle; iconBg: string; iconColor: string }> = {
+  consulta_finalizada: { icon: CheckCircle, iconBg: "bg-success-light", iconColor: "text-success" },
+  agendamento_ia: { icon: Bot, iconBg: "bg-accent", iconColor: "text-primary" },
+  cancelamento: { icon: XCircle, iconBg: "bg-destructive/10", iconColor: "text-destructive" },
+  novo_agendamento: { icon: Clock, iconBg: "bg-accent", iconColor: "text-primary" },
+};
 
-const activities = [
-  {
-    icon: CheckCircle,
-    iconBg: "bg-success-light",
-    iconColor: "text-success",
-    title: "Consulta Finalizada",
-    description: (
-      <>
-        Dra. Mariana completou o atendimento de{" "}
-        <span className="text-foreground font-medium">Carlos Eduardo</span>.
-      </>
-    ),
-    time: "Há 12 minutos",
-    showLine: true,
-  },
-  {
-    icon: Bot,
-    iconBg: "bg-accent",
-    iconColor: "text-primary",
-    title: "Novo Agendamento via IA",
-    description: (
-      <>
-        Paciente <span className="text-foreground font-medium">Ana Julia</span>{" "}
-        agendou Limpeza para amanhã às 14h.
-      </>
-    ),
-    time: "Há 45 minutos",
-    showLine: true,
-  },
-  {
-    icon: AlertTriangle,
-    iconBg: "bg-destructive/10",
-    iconColor: "text-destructive",
-    title: "Agendamento Cancelado",
-    description: (
-      <>
-        O paciente{" "}
-        <span className="text-foreground font-medium">Marcos Viana</span>{" "}
-        cancelou sua consulta das 16:30.
-      </>
-    ),
-    time: "Há 2 horas",
-    showLine: false,
-  },
-];
+const defaultActivityIcon = { icon: Calendar, iconBg: "bg-muted", iconColor: "text-muted-foreground" };
 
 const quickActions = [
-  {
-    icon: UserPlus,
-    bg: "bg-accent",
-    color: "text-primary",
-    label: "Cadastrar Paciente",
-    sub: "Adicionar novo registro",
-  },
-  {
-    icon: FileText,
-    bg: "bg-secondary",
-    color: "text-muted-foreground",
-    label: "Gerar Faturamento",
-    sub: "Relatório financeiro do dia",
-  },
-  {
-    icon: Package,
-    bg: "bg-success-light",
-    color: "text-success",
-    label: "Estoque Dental",
-    sub: "Verificar insumos",
-  },
-];
-
-const nextAppointments = [
-  {
-    time: "09:00 - 10:00",
-    name: "Beatriz Soares",
-    detail: "Canal - Dra. Helena",
-    borderColor: "border-primary",
-    timeColor: "text-primary",
-    initials: "BS",
-  },
-  {
-    time: "10:30 - 11:15",
-    name: "Jorge Almeida",
-    detail: "Avaliação - Dr. Paulo",
-    borderColor: "border-muted-foreground",
-    timeColor: "text-muted-foreground",
-    initials: "JA",
-  },
+  { icon: UserPlus, bg: "bg-accent", color: "text-primary", label: "Cadastrar Paciente", sub: "Adicionar novo registro" },
+  { icon: FileText, bg: "bg-secondary", color: "text-muted-foreground", label: "Gerar Faturamento", sub: "Relatório financeiro do dia" },
+  { icon: Package, bg: "bg-success-light", color: "text-success", label: "Estoque Dental", sub: "Verificar insumos" },
 ];
 
 const Overview = () => {
+  const { data: totalPacientes, isLoading: loadingPacientes } = useTotalPacientes();
+  const { data: consultasHoje, isLoading: loadingConsultas } = useConsultasHoje();
+  const { data: agendamentosIA, isLoading: loadingIA } = useAgendamentosIA();
+  const { data: urgentes, isLoading: loadingUrgentes } = useEncaminhamentosUrgentes();
+  const { data: chartData, isLoading: loadingChart } = useChartData();
+  const { data: atividades, isLoading: loadingAtividades } = useAtividadesRecentes();
+  const { data: proximos, isLoading: loadingProximos } = useProximosAgendamentos();
+
   return (
     <>
       {/* Page Header */}
@@ -137,9 +75,8 @@ const Overview = () => {
           icon={<Users className="h-5 w-5" />}
           iconBg="bg-accent"
           iconColor="text-primary"
-          badge={<span className="text-success font-bold text-sm bg-success-light px-2 py-1 rounded-full">+12%</span>}
           label="Total de Pacientes"
-          value="1,284"
+          value={loadingPacientes ? "..." : (totalPacientes ?? 0).toLocaleString("pt-BR")}
         />
         <KPICard
           icon={<Calendar className="h-5 w-5" />}
@@ -147,7 +84,7 @@ const Overview = () => {
           iconColor="text-muted-foreground"
           badge={<span className="text-muted-foreground font-bold text-sm bg-muted px-2 py-1 rounded-full">Hoje</span>}
           label="Consultas de Hoje"
-          value="24"
+          value={loadingConsultas ? "..." : String(consultasHoje ?? 0).padStart(2, "0")}
         />
         <div className="bg-gradient-to-br from-primary to-primary-glow p-6 rounded-xl shadow-primary-glow text-primary-foreground">
           <div className="flex items-center justify-between mb-4">
@@ -157,7 +94,9 @@ const Overview = () => {
             <span className="font-bold text-sm bg-white/10 px-2 py-1 rounded-full">IA Ativa</span>
           </div>
           <p className="text-primary-foreground/70 text-sm font-medium mb-1">Novos Agendamentos IA</p>
-          <h3 className="text-2xl font-bold font-headline">08</h3>
+          <h3 className="text-2xl font-bold font-headline">
+            {loadingIA ? "..." : String(agendamentosIA ?? 0).padStart(2, "0")}
+          </h3>
         </div>
         <div className="bg-destructive/10 p-6 rounded-xl shadow-card border border-destructive/5">
           <div className="flex items-center justify-between mb-4">
@@ -167,7 +106,9 @@ const Overview = () => {
             <span className="text-destructive font-bold text-sm bg-card/50 px-2 py-1 rounded-full">Urgente</span>
           </div>
           <p className="text-destructive/80 text-sm font-medium mb-1">Encaminhamentos</p>
-          <h3 className="text-2xl font-bold font-headline text-destructive">03</h3>
+          <h3 className="text-2xl font-bold font-headline text-destructive">
+            {loadingUrgentes ? "..." : String(urgentes ?? 0).padStart(2, "0")}
+          </h3>
         </div>
       </div>
 
@@ -180,46 +121,48 @@ const Overview = () => {
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h4 className="text-lg font-bold font-headline">Tendência de Agendamentos</h4>
-                <p className="text-sm text-muted-foreground">Volume semanal de consultas</p>
+                <p className="text-sm text-muted-foreground">Volume dos últimos 7 dias</p>
               </div>
-              <select className="text-sm border-none bg-muted rounded-lg px-3 py-2 focus:ring-0 focus:outline-none">
-                <option>Últimos 7 dias</option>
-                <option>Último mês</option>
-              </select>
             </div>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} barCategoryGap="20%">
-                  <XAxis
-                    dataKey="day"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  <YAxis hide />
-                  <Tooltip
-                    cursor={{ fill: "hsl(var(--muted) / 0.5)" }}
-                    contentStyle={{
-                      background: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          entry.day === "QUI"
-                            ? "hsl(var(--primary-container))"
-                            : "hsl(var(--accent))"
-                        }
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {loadingChart ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData ?? []} barCategoryGap="20%">
+                    <XAxis
+                      dataKey="day"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <YAxis hide />
+                    <Tooltip
+                      cursor={{ fill: "hsl(var(--muted) / 0.5)" }}
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                      {(chartData ?? []).map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            index === 0
+                              ? "hsl(var(--primary-container))"
+                              : "hsl(var(--accent))"
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
@@ -227,25 +170,41 @@ const Overview = () => {
           <div className="bg-card rounded-xl p-8 shadow-card border border-border/50">
             <div className="flex items-center justify-between mb-6">
               <h4 className="text-lg font-bold font-headline">Atividade Recente</h4>
-              <button className="text-primary text-sm font-bold hover:underline">Ver tudo</button>
             </div>
-            <div className="space-y-6">
-              {activities.map((a, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className={`w-10 h-10 rounded-full ${a.iconBg} flex items-center justify-center ${a.iconColor}`}>
-                      <a.icon className="h-5 w-5" />
+            {loadingAtividades ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : !atividades || atividades.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Nenhuma atividade recente.
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {atividades.map((a, i) => {
+                  const config = activityIcons[a.tipo] ?? defaultActivityIcon;
+                  const Icon = config.icon;
+                  const isLast = i === atividades.length - 1;
+                  return (
+                    <div key={a.id} className="flex gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full ${config.iconBg} flex items-center justify-center ${config.iconColor}`}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        {!isLast && <div className="w-px flex-1 bg-border my-2" />}
+                      </div>
+                      <div className={!isLast ? "pb-6" : ""}>
+                        <p className="text-sm font-bold">{a.titulo}</p>
+                        {a.descricao && <p className="text-sm text-muted-foreground">{a.descricao}</p>}
+                        <p className="text-xs text-muted-foreground/60 mt-1">
+                          {formatDistanceToNow(new Date(a.created_at), { addSuffix: true, locale: ptBR })}
+                        </p>
+                      </div>
                     </div>
-                    {a.showLine && <div className="w-px flex-1 bg-border my-2" />}
-                  </div>
-                  <div className={a.showLine ? "pb-6" : ""}>
-                    <p className="text-sm font-bold">{a.title}</p>
-                    <p className="text-sm text-muted-foreground">{a.description}</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">{a.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -274,21 +233,31 @@ const Overview = () => {
 
           {/* Next Appointments */}
           <div className="bg-card rounded-xl p-8 shadow-card border border-border/50">
-            <h4 className="text-lg font-bold font-headline mb-6">Próximos da Manhã</h4>
-            <div className="space-y-4">
-              {nextAppointments.map((ap, i) => (
-                <div key={i} className={`flex items-center gap-4 border-l-4 ${ap.borderColor} pl-4 py-1`}>
-                  <div className="flex-1">
-                    <p className={`text-xs font-bold ${ap.timeColor}`}>{ap.time}</p>
-                    <p className="text-sm font-bold">{ap.name}</p>
-                    <p className="text-xs text-muted-foreground">{ap.detail}</p>
+            <h4 className="text-lg font-bold font-headline mb-6">Próximos Agendamentos</h4>
+            {loadingProximos ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : !proximos || proximos.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Nenhum agendamento próximo.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {proximos.map((ap, i) => (
+                  <div key={ap.id} className={`flex items-center gap-4 border-l-4 ${i === 0 ? "border-primary" : "border-muted-foreground"} pl-4 py-1`}>
+                    <div className="flex-1">
+                      <p className={`text-xs font-bold ${i === 0 ? "text-primary" : "text-muted-foreground"}`}>{ap.time}</p>
+                      <p className="text-sm font-bold">{ap.name}</p>
+                      <p className="text-xs text-muted-foreground">{ap.detail}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-primary text-xs font-bold">
+                      {ap.initials}
+                    </div>
                   </div>
-                  <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-primary text-xs font-bold">
-                    {ap.initials}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <button className="w-full mt-6 py-3 text-sm font-bold border border-border rounded-lg hover:bg-muted transition-colors">
               Ver Agenda Completa
             </button>
@@ -313,17 +282,12 @@ const Overview = () => {
 };
 
 const KPICard = ({
-  icon,
-  iconBg,
-  iconColor,
-  badge,
-  label,
-  value,
+  icon, iconBg, iconColor, badge, label, value,
 }: {
   icon: React.ReactNode;
   iconBg: string;
   iconColor: string;
-  badge: React.ReactNode;
+  badge?: React.ReactNode;
   label: string;
   value: string;
 }) => (
