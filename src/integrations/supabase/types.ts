@@ -14,6 +14,94 @@ export type Database = {
   }
   public: {
     Tables: {
+      agendamentos: {
+        Row: {
+          created_at: string
+          data_hora: string
+          duracao_minutos: number | null
+          id: string
+          observacoes: string | null
+          origem: string | null
+          paciente_id: string
+          profissional_id: string
+          servico_id: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          data_hora: string
+          duracao_minutos?: number | null
+          id?: string
+          observacoes?: string | null
+          origem?: string | null
+          paciente_id: string
+          profissional_id: string
+          servico_id?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          data_hora?: string
+          duracao_minutos?: number | null
+          id?: string
+          observacoes?: string | null
+          origem?: string | null
+          paciente_id?: string
+          profissional_id?: string
+          servico_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendamentos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profissionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      atividades: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          referencia_id: string | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          referencia_id?: string | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          referencia_id?: string | null
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: []
+      }
       caixa_movimentacoes: {
         Row: {
           created_at: string | null
@@ -342,6 +430,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pacientes: {
+        Row: {
+          ativo: boolean
+          cpf: string | null
+          created_at: string
+          data_nascimento: string | null
+          email: string | null
+          endereco: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cpf?: string | null
+          created_at?: string
+          data_nascimento?: string | null
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cpf?: string | null
+          created_at?: string
+          data_nascimento?: string | null
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pedidos: {
         Row: {
           bairro_cliente: string | null
@@ -384,6 +514,69 @@ export type Database = {
           status?: string | null
           telefone_cliente?: string | null
           valor_total?: number
+        }
+        Relationships: []
+      }
+      profissionais: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          cro: string | null
+          email: string | null
+          especialidade: string | null
+          id: string
+          nome: string
+          telefone: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          cro?: string | null
+          email?: string | null
+          especialidade?: string | null
+          id?: string
+          nome: string
+          telefone?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          cro?: string | null
+          email?: string | null
+          especialidade?: string | null
+          id?: string
+          nome?: string
+          telefone?: string | null
+        }
+        Relationships: []
+      }
+      servicos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          descricao: string | null
+          duracao_minutos: number | null
+          id: string
+          nome: string
+          preco: number | null
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          descricao?: string | null
+          duracao_minutos?: number | null
+          id?: string
+          nome: string
+          preco?: number | null
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          descricao?: string | null
+          duracao_minutos?: number | null
+          id?: string
+          nome?: string
+          preco?: number | null
         }
         Relationships: []
       }
