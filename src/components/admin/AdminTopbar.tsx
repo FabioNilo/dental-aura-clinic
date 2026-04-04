@@ -1,37 +1,82 @@
-import { Search, HelpCircle, Bell } from "lucide-react";
+import { CalendarClock, ShieldCheck } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { useClinicAuth } from "@/features/auth/ClinicAuth";
+
+const pageMeta: Record<string, { title: string; subtitle: string }> = {
+  "/admin": {
+    title: "Visao geral",
+    subtitle: "Resumo operacional do funil de atendimento da clinica.",
+  },
+  "/admin/agenda": {
+    title: "Agenda",
+    subtitle: "Compromissos do dia, carga operacional e atualizacao de status.",
+  },
+  "/admin/solicitacoes": {
+    title: "Solicitacoes",
+    subtitle: "Entradas vindas do atendimento virtual, site e operacao manual.",
+  },
+  "/admin/pacientes": {
+    title: "Pacientes",
+    subtitle: "Cadastro base de contatos, contexto e historico operacional.",
+  },
+  "/admin/profissionais": {
+    title: "Profissionais",
+    subtitle: "Cadastro base do time clinico usado nas confirmacoes e na agenda.",
+  },
+  "/admin/servicos": {
+    title: "Servicos",
+    subtitle: "Cadastro base de procedimentos usados pela operacao da clinica.",
+  },
+};
 
 const AdminTopbar = () => {
-  return (
-    <header className="fixed top-0 right-0 w-[calc(100%-16rem)] z-40 glass-panel border-b border-border/50 shadow-sm flex justify-between items-center h-16 px-8">
-      <div className="flex items-center gap-4 flex-1">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            className="w-full bg-muted rounded-full pl-10 pr-4 py-2 text-sm border-none focus:ring-2 focus:ring-primary/20 focus:outline-none"
-            placeholder="Pesquisar pacientes, médicos..."
-            type="text"
-          />
-        </div>
-      </div>
+  const location = useLocation();
+  const { user } = useClinicAuth();
+  
+  // Detectar se é rota de paciente detalhes
+  const isPacienteDetalhes = location.pathname.match(/^\/admin\/pacientes\/[^/]+$/);
+  
+  let meta = isPacienteDetalhes 
+    ? {
+        title: "Detalhes do Paciente",
+        subtitle: "Prontuário completo, histórico de tratamentos e consultas.",
+      }
+    : pageMeta[location.pathname] ?? pageMeta["/admin"];
+  const initials =
+    (user?.email ?? "AD")
+      .split("@")[0]
+      .split(/[.\-_]/)
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase())
+      .join("")
+      .slice(0, 2) || "AD";
 
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-3">
-          <button className="text-muted-foreground hover:text-primary transition-opacity opacity-80 hover:opacity-100">
-            <HelpCircle className="h-5 w-5" />
-          </button>
-          <button className="text-muted-foreground hover:text-primary transition-opacity opacity-80 hover:opacity-100 relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-0 right-0 w-2 h-2 bg-destructive rounded-full border-2 border-card" />
-          </button>
-        </div>
-        <div className="h-8 w-px bg-border" />
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-sm font-bold text-foreground leading-tight">Dr. Ricardo Silva</p>
-            <p className="text-[10px] text-muted-foreground font-medium">Administrador</p>
+  return (
+    <header className="sticky top-3 z-30 px-4 pt-3 sm:px-6 lg:px-8 xl:top-4 xl:px-10 2xl:px-12">
+      <div className="glass-panel flex flex-col gap-4 rounded-[28px] border border-border/60 bg-background/85 px-4 py-4 shadow-card backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-6 xl:px-7">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent text-primary">
+            <CalendarClock className="h-5 w-5" />
           </div>
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-            RS
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Painel odontologico
+            </p>
+            <h2 className="mt-1 text-lg font-bold font-headline text-foreground sm:text-xl">{meta.title}</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{meta.subtitle}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 shadow-card lg:min-w-[280px] lg:justify-end">
+          <div className="min-w-0 text-left lg:text-right">
+            <p className="flex items-center gap-2 text-sm font-bold leading-tight text-foreground lg:justify-end">
+              <ShieldCheck className="h-4 w-4 text-success" />
+              Administrador
+            </p>
+            <p className="truncate text-[11px] font-medium text-muted-foreground">{user?.email ?? "Sessao ativa"}</p>
+          </div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+            {initials}
           </div>
         </div>
       </div>

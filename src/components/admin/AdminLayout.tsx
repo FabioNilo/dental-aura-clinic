@@ -1,21 +1,19 @@
 import { Outlet } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopbar from "./AdminTopbar";
-import { MessageCircle } from "lucide-react";
 
 const AdminLayout = () => {
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar />
-      <main className="ml-64 min-h-screen">
+      <main className="min-h-screen xl:ml-72">
         <AdminTopbar />
-        <div className="pt-24 px-10 pb-12">
-          <Outlet />
+        <div className="mx-auto flex min-h-screen w-full max-w-[1720px] flex-col px-4 pb-8 pt-4 sm:px-6 sm:pb-10 lg:px-8 xl:px-10 xl:pb-12 xl:pt-6 2xl:px-12">
+          <div className="flex-1 pt-4 xl:pt-6">
+            <Outlet />
+          </div>
         </div>
       </main>
-      <button className="fixed bottom-8 right-8 w-14 h-14 rounded-full bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-transform z-50">
-        <MessageCircle className="h-6 w-6" />
-      </button>
     </div>
   );
 };

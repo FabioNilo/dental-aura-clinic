@@ -1,0 +1,195 @@
+{
+  "name": "Atendimento Clinica Odontologica v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clinica-atendimento",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-clinica",
+      "name": "Receber atendimento",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -860,
+        40
+      ],
+      "webhookId": "clinica-atendimento-v1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\n\nfunction requiredString(value, field) {\n  const text = String(value ?? '').trim();\n  if (!text) {\n    throw new Error(`Campo obrigatorio ausente: ${field}`);\n  }\n  return text;\n}\n\nfunction optionalString(value) {\n  const text = String(value ?? '').trim();\n  return text || null;\n}\n\nfunction normalizePhone(value) {\n  const digits = String(value ?? '').replace(/\\D/g, '');\n  if (!digits) {\n    throw new Error('Campo obrigatorio ausente: telefone_cliente');\n  }\n  return digits;\n}\n\nfunction fallbackCode() {\n  const now = new Date();\n  const stamp = now.toISOString().slice(0, 10).replace(/-/g, '');\n  const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();\n  return `SOL-${stamp}-${suffix}`;\n}\n\nreturn [{\n  json: {\n    codigo_externo: optionalString(body.codigo_externo) ?? fallbackCode(),\n    origem: optionalString(body.origem) ?? 'whatsapp',\n    canal_origem: optionalString(body.canal_origem) ?? 'n8n',\n    nome_cliente: requiredString(body.nome_cliente, 'nome_cliente'),\n    telefone_cliente: normalizePhone(body.telefone_cliente),\n    procedimento_nome: optionalString(body.procedimento_nome) ?? 'Consulta geral',\n    dia_desejado: requiredString(body.dia_desejado, 'dia_desejado'),\n    turno_desejado: requiredString(body.turno_desejado, 'turno_desejado'),\n    observacoes_cliente: optionalString(body.observacoes_cliente),\n    payload_externo: body.payload_externo ?? body,\n    resumo_atendimento: body.resumo_atendimento ?? null\n  }\n}];"
+      },
+      "id": "code-normalizar",
+      "name": "Normalizar entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -580,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL + '/rest/v1/rpc/upsert_paciente_por_telefone' }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ { \"apikey\": $env.SUPABASE_SERVICE_ROLE_KEY, \"Authorization\": \"Bearer \" + $env.SUPABASE_SERVICE_ROLE_KEY, \"Content-Type\": \"application/json\" } }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_nome: $json.nome_cliente, p_telefone: $json.telefone_cliente } }}"
+      },
+      "id": "http-upsert-paciente",
+      "name": "Upsert paciente por telefone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -280,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const entrada = $('Normalizar entrada').first().json;\nconst rpcResponse = $('Upsert paciente por telefone').first().json;\n\nconst pacienteId = typeof rpcResponse === 'string'\n  ? rpcResponse\n  : rpcResponse?.id ?? rpcResponse?.data ?? rpcResponse?.value ?? null;\n\nreturn [{\n  json: {\n    ...entrada,\n    paciente_id: pacienteId,\n    status: 'novo'\n  }\n}];"
+      },
+      "id": "code-preparar-insert",
+      "name": "Preparar solicitacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL + '/rest/v1/solicitacoes_agendamento' }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ { \"apikey\": $env.SUPABASE_SERVICE_ROLE_KEY, \"Authorization\": \"Bearer \" + $env.SUPABASE_SERVICE_ROLE_KEY, \"Content-Type\": \"application/json\", \"Prefer\": \"return=representation\" } }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { status: $json.status, origem: $json.origem, canal_origem: $json.canal_origem, codigo_externo: $json.codigo_externo, paciente_id: $json.paciente_id, nome_cliente: $json.nome_cliente, telefone_cliente: $json.telefone_cliente, procedimento_nome: $json.procedimento_nome, dia_desejado: $json.dia_desejado, turno_desejado: $json.turno_desejado, observacoes_cliente: $json.observacoes_cliente, payload_externo: $json.payload_externo, resumo_atendimento: $json.resumo_atendimento } }}"
+      },
+      "id": "http-insert-solicitacao",
+      "name": "Criar solicitacao",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = Array.isArray($json) ? $json[0] : $json;\nreturn [{ json: { ok: true, solicitacao_id: row?.id ?? null, codigo_externo: row?.codigo_externo ?? null, status: row?.status ?? 'novo' } }];"
+      },
+      "id": "code-resposta",
+      "name": "Montar resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Responder webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        820,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Receber atendimento": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada": {
+      "main": [
+        [
+          {
+            "node": "Upsert paciente por telefone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert paciente por telefone": {
+      "main": [
+        [
+          {
+            "node": "Preparar solicitacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar solicitacao": {
+      "main": [
+        [
+          {
+            "node": "Criar solicitacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar solicitacao": {
+      "main": [
+        [
+          {
+            "node": "Montar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar resposta": {
+      "main": [
+        [
+          {
+            "node": "Responder webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "clinica-atendimento-v1",
+  "active": false,
+  "id": "clinica-atendimento-v1",
+  "tags": []
+}

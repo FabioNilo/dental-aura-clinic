@@ -1,64 +1,81 @@
 import { useQuery } from "@tanstack/react-query";
+import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, format, subDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { SOLICITACAO_PENDING_STATUSES } from "@/features/solicitacoes/api";
 
 export function useTotalPacientes() {
   return useQuery({
-    queryKey: ["total-pacientes"],
+    queryKey: ["overview", "total-pacientes"],
     queryFn: async () => {
       const { count, error } = await supabase
         .from("pacientes")
         .select("*", { count: "exact", head: true })
         .eq("ativo", true);
-      if (error) throw error;
+
+      if (error) {
+        throw error;
+      }
+
       return count ?? 0;
     },
   });
 }
 
-export function useConsultasHoje() {
+export function useSolicitacoesHoje() {
   return useQuery({
-    queryKey: ["consultas-hoje"],
+    queryKey: ["overview", "solicitacoes-hoje"],
     queryFn: async () => {
       const now = new Date();
       const { count, error } = await supabase
-        .from("agendamentos")
+        .from("solicitacoes_agendamento")
         .select("*", { count: "exact", head: true })
-        .gte("data_hora", startOfDay(now).toISOString())
-        .lte("data_hora", endOfDay(now).toISOString());
-      if (error) throw error;
+        .gte("created_at", startOfDay(now).toISOString())
+        .lte("created_at", endOfDay(now).toISOString());
+
+      if (error) {
+        throw error;
+      }
+
       return count ?? 0;
     },
   });
 }
 
-export function useAgendamentosIA() {
+export function useConfirmacoesIAHoje() {
   return useQuery({
-    queryKey: ["agendamentos-ia"],
+    queryKey: ["overview", "confirmacoes-ia-hoje"],
     queryFn: async () => {
       const now = new Date();
       const { count, error } = await supabase
-        .from("agendamentos")
+        .from("solicitacoes_agendamento")
         .select("*", { count: "exact", head: true })
-        .eq("origem", "ia")
-        .gte("data_hora", startOfDay(now).toISOString())
-        .lte("data_hora", endOfDay(now).toISOString());
-      if (error) throw error;
+        .eq("canal_origem", "n8n")
+        .eq("status", "agendado")
+        .gte("updated_at", startOfDay(now).toISOString())
+        .lte("updated_at", endOfDay(now).toISOString());
+
+      if (error) {
+        throw error;
+      }
+
       return count ?? 0;
     },
   });
 }
 
-export function useEncaminhamentosUrgentes() {
+export function usePendenciasOperacionais() {
   return useQuery({
-    queryKey: ["encaminhamentos-urgentes"],
+    queryKey: ["overview", "pendencias-operacionais"],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from("agendamentos")
+        .from("solicitacoes_agendamento")
         .select("*", { count: "exact", head: true })
-        .eq("status", "urgente");
-      if (error) throw error;
+        .in("status", [...SOLICITACAO_PENDING_STATUSES]);
+
+      if (error) {
+        throw error;
+      }
+
       return count ?? 0;
     },
   });
@@ -69,22 +86,25 @@ export function useChartData() {
     queryKey: ["chart-agendamentos-semana"],
     queryFn: async () => {
       const days: { day: string; value: number }[] = [];
-      const dayLabels = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
 
-      // Last 7 days
-      for (let i = 6; i >= 0; i--) {
-        const date = subDays(new Date(), i);
+      for (let index = 6; index >= 0; index -= 1) {
+        const date = subDays(new Date(), index);
         const { count, error } = await supabase
-          .from("agendamentos")
+          .from("solicitacoes_agendamento")
           .select("*", { count: "exact", head: true })
-          .gte("data_hora", startOfDay(date).toISOString())
-          .lte("data_hora", endOfDay(date).toISOString());
-        if (error) throw error;
+          .gte("created_at", startOfDay(date).toISOString())
+          .lte("created_at", endOfDay(date).toISOString());
+
+        if (error) {
+          throw error;
+        }
+
         days.push({
-          day: dayLabels[date.getDay()],
+          day: format(date, "dd/MM"),
           value: count ?? 0,
         });
       }
+
       return days;
     },
   });
@@ -98,8 +118,12 @@ export function useAtividadesRecentes() {
         .from("atividades")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(5);
-      if (error) throw error;
+        .limit(6);
+
+      if (error) {
+        throw error;
+      }
+
       return data ?? [];
     },
   });
@@ -112,55 +136,72 @@ export function useProximosAgendamentos() {
       const now = new Date();
       const { data, error } = await supabase
         .from("agendamentos")
-        .select(`
-          id,
-          data_hora,
-          duracao_minutos,
-          status,
-          paciente_id,
-          profissional_id,
-          servico_id
-        `)
+        .select("id, data_hora, duracao_minutos, status, paciente_id, profissional_id, servico_id")
         .gte("data_hora", now.toISOString())
+        .neq("status", "cancelado")
         .order("data_hora", { ascending: true })
         .limit(4);
-      if (error) throw error;
 
-      // Fetch related data
-      if (!data || data.length === 0) return [];
+      if (error) {
+        throw error;
+      }
 
-      const pacienteIds = [...new Set(data.map((a) => a.paciente_id))];
-      const profissionalIds = [...new Set(data.map((a) => a.profissional_id))];
-      const servicoIds = [...new Set(data.filter((a) => a.servico_id).map((a) => a.servico_id!))];
+      if (!data || data.length === 0) {
+        return [];
+      }
+
+      const pacienteIds = [...new Set(data.map((item) => item.paciente_id))];
+      const profissionalIds = [...new Set(data.map((item) => item.profissional_id))];
+      const servicoIds = [...new Set(data.flatMap((item) => (item.servico_id ? [item.servico_id] : [])))];
 
       const [pacientes, profissionais, servicos] = await Promise.all([
-        supabase.from("pacientes").select("id, nome").in("id", pacienteIds),
-        supabase.from("profissionais").select("id, nome").in("id", profissionalIds),
+        pacienteIds.length > 0
+          ? supabase.from("pacientes").select("id, nome").in("id", pacienteIds)
+          : Promise.resolve({ data: [], error: null }),
+        profissionalIds.length > 0
+          ? supabase.from("profissionais").select("id, nome").in("id", profissionalIds)
+          : Promise.resolve({ data: [], error: null }),
         servicoIds.length > 0
           ? supabase.from("servicos").select("id, nome").in("id", servicoIds)
-          : { data: [], error: null },
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
-      const pacMap = Object.fromEntries((pacientes.data ?? []).map((p) => [p.id, p.nome]));
-      const profMap = Object.fromEntries((profissionais.data ?? []).map((p) => [p.id, p.nome]));
-      const servMap = Object.fromEntries(((servicos as any).data ?? []).map((s: any) => [s.id, s.nome]));
+      if (pacientes.error) {
+        throw pacientes.error;
+      }
 
-      return data.map((a) => {
-        const start = new Date(a.data_hora);
-        const end = new Date(start.getTime() + (a.duracao_minutos ?? 30) * 60000);
-        const timeStr = `${format(start, "HH:mm")} - ${format(end, "HH:mm")}`;
-        const nome = pacMap[a.paciente_id] ?? "Paciente";
-        const initials = nome
+      if (profissionais.error) {
+        throw profissionais.error;
+      }
+
+      if (servicos.error) {
+        throw servicos.error;
+      }
+
+      const pacienteMap = Object.fromEntries((pacientes.data ?? []).map((item) => [item.id, item.nome]));
+      const profissionalMap = Object.fromEntries((profissionais.data ?? []).map((item) => [item.id, item.nome]));
+      const servicoMap = Object.fromEntries((servicos.data ?? []).map((item) => [item.id, item.nome]));
+
+      return data.map((item) => {
+        const start = new Date(item.data_hora);
+        const end = new Date(start.getTime() + (item.duracao_minutos ?? 30) * 60000);
+        const patientName = pacienteMap[item.paciente_id] ?? "Paciente";
+        const initials = patientName
           .split(" ")
-          .map((w: string) => w[0])
+          .map((chunk) => chunk[0])
           .join("")
           .slice(0, 2)
           .toUpperCase();
-        const servico = a.servico_id ? servMap[a.servico_id] ?? "" : "";
-        const prof = profMap[a.profissional_id] ?? "";
-        const detail = [servico, prof].filter(Boolean).join(" - ");
 
-        return { id: a.id, time: timeStr, name: nome, detail, initials };
+        return {
+          detail: [servicoMap[item.servico_id ?? ""], profissionalMap[item.profissional_id]]
+            .filter(Boolean)
+            .join(" - "),
+          id: item.id,
+          initials,
+          name: patientName,
+          time: `${format(start, "HH:mm")} - ${format(end, "HH:mm")}`,
+        };
       });
     },
   });

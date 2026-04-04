@@ -1,162 +1,179 @@
+import { Link } from "react-router-dom";
 import {
-  Users,
-  Calendar,
   Bot,
-  AlertTriangle,
-  UserPlus,
-  FileText,
-  Package,
+  Calendar,
   CheckCircle,
-  Sparkles,
+  ClipboardList,
   Clock,
-  XCircle,
   Loader2,
+  Sparkles,
+  Users,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
-import {
-  useTotalPacientes,
-  useConsultasHoje,
-  useAgendamentosIA,
-  useEncaminhamentosUrgentes,
-  useChartData,
-  useAtividadesRecentes,
-  useProximosAgendamentos,
-} from "@/hooks/useOverviewData";
+import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Button } from "@/components/ui/button";
+import {
+  useAtividadesRecentes,
+  useChartData,
+  useConfirmacoesIAHoje,
+  usePendenciasOperacionais,
+  useProximosAgendamentos,
+  useSolicitacoesHoje,
+  useTotalPacientes,
+} from "@/hooks/useOverviewData";
 
 const activityIcons: Record<string, { icon: typeof CheckCircle; iconBg: string; iconColor: string }> = {
-  consulta_finalizada: { icon: CheckCircle, iconBg: "bg-success-light", iconColor: "text-success" },
-  agendamento_ia: { icon: Bot, iconBg: "bg-accent", iconColor: "text-primary" },
-  cancelamento: { icon: XCircle, iconBg: "bg-destructive/10", iconColor: "text-destructive" },
-  novo_agendamento: { icon: Clock, iconBg: "bg-accent", iconColor: "text-primary" },
+  agendamento_confirmado: {
+    icon: CheckCircle,
+    iconBg: "bg-success-light",
+    iconColor: "text-success",
+  },
+  solicitacao_cancelada: {
+    icon: Clock,
+    iconBg: "bg-destructive/10",
+    iconColor: "text-destructive",
+  },
+  solicitacao_remarcacao: {
+    icon: ClipboardList,
+    iconBg: "bg-orange-100",
+    iconColor: "text-orange-700",
+  },
 };
 
-const defaultActivityIcon = { icon: Calendar, iconBg: "bg-muted", iconColor: "text-muted-foreground" };
+const defaultActivityIcon = {
+  icon: Calendar,
+  iconBg: "bg-muted",
+  iconColor: "text-muted-foreground",
+};
 
 const quickActions = [
-  { icon: UserPlus, bg: "bg-accent", color: "text-primary", label: "Cadastrar Paciente", sub: "Adicionar novo registro" },
-  { icon: FileText, bg: "bg-secondary", color: "text-muted-foreground", label: "Gerar Faturamento", sub: "Relatório financeiro do dia" },
-  { icon: Package, bg: "bg-success-light", color: "text-success", label: "Estoque Dental", sub: "Verificar insumos" },
+  {
+    bg: "bg-accent",
+    color: "text-primary",
+    cta: "/admin/solicitacoes",
+    icon: ClipboardList,
+    label: "Abrir fila de solicitações",
+    sub: "Revisar entradas do n8n e do time",
+  },
+  {
+    bg: "bg-success-light",
+    color: "text-success",
+    cta: "/admin/solicitacoes",
+    icon: CheckCircle,
+    label: "Confirmar próximas entradas",
+    sub: "Transformar pedidos em agendamentos",
+  },
+  {
+    bg: "bg-secondary",
+    color: "text-muted-foreground",
+    cta: "/admin",
+    icon: Users,
+    label: "Acompanhar capacidade",
+    sub: "Monitorar carga operacional do dia",
+  },
 ];
 
 const Overview = () => {
   const { data: totalPacientes, isLoading: loadingPacientes } = useTotalPacientes();
-  const { data: consultasHoje, isLoading: loadingConsultas } = useConsultasHoje();
-  const { data: agendamentosIA, isLoading: loadingIA } = useAgendamentosIA();
-  const { data: urgentes, isLoading: loadingUrgentes } = useEncaminhamentosUrgentes();
+  const { data: solicitacoesHoje, isLoading: loadingSolicitacoes } = useSolicitacoesHoje();
+  const { data: confirmacoesIA, isLoading: loadingConfirmacoes } = useConfirmacoesIAHoje();
+  const { data: pendencias, isLoading: loadingPendencias } = usePendenciasOperacionais();
   const { data: chartData, isLoading: loadingChart } = useChartData();
   const { data: atividades, isLoading: loadingAtividades } = useAtividadesRecentes();
   const { data: proximos, isLoading: loadingProximos } = useProximosAgendamentos();
 
   return (
-    <>
-      {/* Page Header */}
-      <div className="mb-10">
-        <h2 className="text-3xl font-extrabold font-headline text-foreground tracking-tight">
-          Visão Geral
-        </h2>
-        <p className="text-muted-foreground font-medium mt-1">
-          Bem-vindo de volta. Aqui está o que está acontecendo na clínica hoje.
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-3xl font-extrabold font-headline text-foreground tracking-tight">
+          Operação da clínica
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          Acompanhe o volume da entrada por IA, o que já foi confirmado e o que ainda depende de decisão humana.
         </p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-4">
         <KPICard
           icon={<Users className="h-5 w-5" />}
           iconBg="bg-accent"
           iconColor="text-primary"
-          label="Total de Pacientes"
+          label="Pacientes ativos"
           value={loadingPacientes ? "..." : (totalPacientes ?? 0).toLocaleString("pt-BR")}
         />
         <KPICard
-          icon={<Calendar className="h-5 w-5" />}
+          badge={<span className="rounded-full bg-muted px-2 py-1 text-sm font-bold text-muted-foreground">Hoje</span>}
+          icon={<ClipboardList className="h-5 w-5" />}
           iconBg="bg-surface-high"
           iconColor="text-muted-foreground"
-          badge={<span className="text-muted-foreground font-bold text-sm bg-muted px-2 py-1 rounded-full">Hoje</span>}
-          label="Consultas de Hoje"
-          value={loadingConsultas ? "..." : String(consultasHoje ?? 0).padStart(2, "0")}
+          label="Solicitações recebidas"
+          value={loadingSolicitacoes ? "..." : String(solicitacoesHoje ?? 0).padStart(2, "0")}
         />
-        <div className="bg-gradient-to-br from-primary to-primary-glow p-6 rounded-xl shadow-primary-glow text-primary-foreground">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center">
+        <div className="rounded-xl bg-gradient-to-br from-primary to-primary-glow p-6 text-primary-foreground shadow-primary-glow">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/20">
               <Bot className="h-5 w-5" />
             </div>
-            <span className="font-bold text-sm bg-white/10 px-2 py-1 rounded-full">IA Ativa</span>
+            <span className="rounded-full bg-white/10 px-2 py-1 text-sm font-bold">IA + n8n</span>
           </div>
-          <p className="text-primary-foreground/70 text-sm font-medium mb-1">Novos Agendamentos IA</p>
+          <p className="mb-1 text-sm font-medium text-primary-foreground/70">Confirmações hoje</p>
           <h3 className="text-2xl font-bold font-headline">
-            {loadingIA ? "..." : String(agendamentosIA ?? 0).padStart(2, "0")}
+            {loadingConfirmacoes ? "..." : String(confirmacoesIA ?? 0).padStart(2, "0")}
           </h3>
         </div>
-        <div className="bg-destructive/10 p-6 rounded-xl shadow-card border border-destructive/5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive">
-              <AlertTriangle className="h-5 w-5" />
+        <div className="rounded-xl border border-destructive/10 bg-destructive/10 p-6 shadow-card">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+              <Clock className="h-5 w-5" />
             </div>
-            <span className="text-destructive font-bold text-sm bg-card/50 px-2 py-1 rounded-full">Urgente</span>
+            <span className="rounded-full bg-card/50 px-2 py-1 text-sm font-bold text-destructive">Pendente</span>
           </div>
-          <p className="text-destructive/80 text-sm font-medium mb-1">Encaminhamentos</p>
+          <p className="mb-1 text-sm font-medium text-destructive/80">Fila operacional</p>
           <h3 className="text-2xl font-bold font-headline text-destructive">
-            {loadingUrgentes ? "..." : String(urgentes ?? 0).padStart(2, "0")}
+            {loadingPendencias ? "..." : String(pendencias ?? 0).padStart(2, "0")}
           </h3>
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left 2/3 */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Chart */}
-          <div className="bg-card rounded-xl p-8 shadow-card border border-border/50">
-            <div className="flex items-center justify-between mb-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div className="space-y-8 lg:col-span-2">
+          <div className="rounded-[28px] border border-border/50 bg-card p-6 shadow-card sm:p-7 xl:p-8">
+            <div className="mb-8 flex items-center justify-between">
               <div>
-                <h4 className="text-lg font-bold font-headline">Tendência de Agendamentos</h4>
-                <p className="text-sm text-muted-foreground">Volume dos últimos 7 dias</p>
+                <h4 className="text-lg font-bold font-headline">Entradas da semana</h4>
+                <p className="text-sm text-muted-foreground">Solicitações criadas nos últimos 7 dias</p>
               </div>
             </div>
             <div className="h-64">
               {loadingChart ? (
-                <div className="flex items-center justify-center h-full">
+                <div className="flex h-full items-center justify-center">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData ?? []} barCategoryGap="20%">
+                <ResponsiveContainer height="100%" width="100%">
+                  <BarChart barCategoryGap="20%" data={chartData ?? []}>
                     <XAxis
-                      dataKey="day"
                       axisLine={false}
-                      tickLine={false}
+                      dataKey="day"
                       tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }}
+                      tickLine={false}
                     />
                     <YAxis hide />
                     <Tooltip
-                      cursor={{ fill: "hsl(var(--muted) / 0.5)" }}
                       contentStyle={{
                         background: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: 8,
                         fontSize: 12,
                       }}
+                      cursor={{ fill: "hsl(var(--muted) / 0.5)" }}
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                       {(chartData ?? []).map((entry, index) => (
                         <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            index === 0
-                              ? "hsl(var(--primary-container))"
-                              : "hsl(var(--accent))"
-                          }
+                          fill={index === (chartData?.length ?? 1) - 1 ? "hsl(var(--primary-container))" : "hsl(var(--accent))"}
+                          key={`${entry.day}-${index}`}
                         />
                       ))}
                     </Bar>
@@ -166,38 +183,41 @@ const Overview = () => {
             </div>
           </div>
 
-          {/* Recent Activity */}
-          <div className="bg-card rounded-xl p-8 shadow-card border border-border/50">
-            <div className="flex items-center justify-between mb-6">
-              <h4 className="text-lg font-bold font-headline">Atividade Recente</h4>
+          <div className="rounded-[28px] border border-border/50 bg-card p-6 shadow-card sm:p-7 xl:p-8">
+            <div className="mb-6 flex items-center justify-between">
+              <h4 className="text-lg font-bold font-headline">Atividade recente</h4>
             </div>
             {loadingAtividades ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : !atividades || atividades.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Nenhuma atividade recente.
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma atividade recente.</p>
             ) : (
               <div className="space-y-6">
-                {atividades.map((a, i) => {
-                  const config = activityIcons[a.tipo] ?? defaultActivityIcon;
+                {atividades.map((activity, index) => {
+                  const config = activityIcons[activity.tipo] ?? defaultActivityIcon;
                   const Icon = config.icon;
-                  const isLast = i === atividades.length - 1;
+                  const isLast = index === atividades.length - 1;
+
                   return (
-                    <div key={a.id} className="flex gap-4">
+                    <div className="flex gap-4" key={activity.id}>
                       <div className="flex flex-col items-center">
-                        <div className={`w-10 h-10 rounded-full ${config.iconBg} flex items-center justify-center ${config.iconColor}`}>
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-full ${config.iconBg} ${config.iconColor}`}>
                           <Icon className="h-5 w-5" />
                         </div>
-                        {!isLast && <div className="w-px flex-1 bg-border my-2" />}
+                        {!isLast ? <div className="my-2 w-px flex-1 bg-border" /> : null}
                       </div>
                       <div className={!isLast ? "pb-6" : ""}>
-                        <p className="text-sm font-bold">{a.titulo}</p>
-                        {a.descricao && <p className="text-sm text-muted-foreground">{a.descricao}</p>}
-                        <p className="text-xs text-muted-foreground/60 mt-1">
-                          {formatDistanceToNow(new Date(a.created_at), { addSuffix: true, locale: ptBR })}
+                        <p className="text-sm font-bold">{activity.titulo}</p>
+                        {activity.descricao ? (
+                          <p className="text-sm text-muted-foreground">{activity.descricao}</p>
+                        ) : null}
+                        <p className="mt-1 text-xs text-muted-foreground/60">
+                          {formatDistanceToNow(new Date(activity.created_at), {
+                            addSuffix: true,
+                            locale: ptBR,
+                          })}
                         </p>
                       </div>
                     </div>
@@ -208,97 +228,103 @@ const Overview = () => {
           </div>
         </div>
 
-        {/* Right 1/3 */}
         <div className="space-y-8">
-          {/* Quick Actions */}
-          <div className="bg-surface-high rounded-xl p-8 shadow-card">
-            <h4 className="text-lg font-bold font-headline mb-6">Ações Rápidas</h4>
+          <div className="rounded-[28px] bg-surface-high p-6 shadow-card sm:p-7 xl:p-8">
+            <h4 className="mb-6 text-lg font-bold font-headline">Ações rápidas</h4>
             <div className="grid grid-cols-1 gap-3">
-              {quickActions.map((qa, i) => (
-                <button
-                  key={i}
-                  className="flex items-center gap-4 p-4 bg-card rounded-xl hover:bg-primary group transition-all duration-300"
-                >
-                  <div className={`w-10 h-10 rounded-lg ${qa.bg} group-hover:bg-primary-foreground/20 flex items-center justify-center ${qa.color} group-hover:text-primary-foreground`}>
-                    <qa.icon className="h-5 w-5" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold group-hover:text-primary-foreground">{qa.label}</p>
-                    <p className="text-xs text-muted-foreground group-hover:text-primary-foreground/70">{qa.sub}</p>
-                  </div>
-                </button>
+              {quickActions.map((item) => (
+                <Link key={item.label} to={item.cta}>
+                  <button className="group flex w-full items-center gap-4 rounded-2xl bg-card p-4 transition-all duration-300 hover:bg-primary sm:p-5">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${item.bg} ${item.color} group-hover:bg-primary-foreground/20 group-hover:text-primary-foreground`}>
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold group-hover:text-primary-foreground">{item.label}</p>
+                      <p className="text-xs text-muted-foreground group-hover:text-primary-foreground/70">
+                        {item.sub}
+                      </p>
+                    </div>
+                  </button>
+                </Link>
               ))}
             </div>
           </div>
 
-          {/* Next Appointments */}
-          <div className="bg-card rounded-xl p-8 shadow-card border border-border/50">
-            <h4 className="text-lg font-bold font-headline mb-6">Próximos Agendamentos</h4>
+          <div className="rounded-[28px] border border-border/50 bg-card p-6 shadow-card sm:p-7 xl:p-8">
+            <div className="mb-6 flex items-center justify-between">
+              <h4 className="text-lg font-bold font-headline">Próximos agendamentos</h4>
+              <Link to="/admin/solicitacoes">
+                <Button size="sm" variant="outline">
+                  Abrir fila
+                </Button>
+              </Link>
+            </div>
             {loadingProximos ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : !proximos || proximos.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                Nenhum agendamento próximo.
-              </p>
+              <p className="py-6 text-center text-sm text-muted-foreground">Nenhum agendamento próximo.</p>
             ) : (
               <div className="space-y-4">
-                {proximos.map((ap, i) => (
-                  <div key={ap.id} className={`flex items-center gap-4 border-l-4 ${i === 0 ? "border-primary" : "border-muted-foreground"} pl-4 py-1`}>
+                {proximos.map((appointment, index) => (
+                  <div
+                    className={`flex items-center gap-4 border-l-4 pl-4 py-1 ${index === 0 ? "border-primary" : "border-muted-foreground"}`}
+                    key={appointment.id}
+                  >
                     <div className="flex-1">
-                      <p className={`text-xs font-bold ${i === 0 ? "text-primary" : "text-muted-foreground"}`}>{ap.time}</p>
-                      <p className="text-sm font-bold">{ap.name}</p>
-                      <p className="text-xs text-muted-foreground">{ap.detail}</p>
+                      <p className={`text-xs font-bold ${index === 0 ? "text-primary" : "text-muted-foreground"}`}>
+                        {appointment.time}
+                      </p>
+                      <p className="text-sm font-bold">{appointment.name}</p>
+                      <p className="text-xs text-muted-foreground">{appointment.detail}</p>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-primary text-xs font-bold">
-                      {ap.initials}
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-xs font-bold text-primary">
+                      {appointment.initials}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-            <button className="w-full mt-6 py-3 text-sm font-bold border border-border rounded-lg hover:bg-muted transition-colors">
-              Ver Agenda Completa
-            </button>
           </div>
 
-          {/* AI Insight */}
-          <div className="bg-card rounded-xl p-6 shadow-card border border-primary/10 overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-8 -mt-8" />
-            <div className="flex items-center gap-3 mb-3">
+          <div className="relative overflow-hidden rounded-[28px] border border-primary/10 bg-card p-6 shadow-card">
+            <div className="absolute right-0 top-0 -mr-8 -mt-8 h-24 w-24 rounded-full bg-primary/5" />
+            <div className="mb-3 flex items-center gap-3">
               <Sparkles className="h-5 w-5 text-primary" />
-              <span className="text-xs font-bold text-primary uppercase tracking-wider">AI Insight</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-primary">Leitura do MVP</span>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed italic">
-              "A procura por Clareamento Dental subiu 15% esta semana. Considere criar uma campanha
-              promocional para pacientes recorrentes."
+            <p className="text-sm italic leading-relaxed text-muted-foreground">
+              "O gargalo atual não é capturar demanda, é sim validar rapidamente cada entrada. Priorize a fila de solicitações antes de expandir a agenda."
             </p>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
 const KPICard = ({
-  icon, iconBg, iconColor, badge, label, value,
+  badge,
+  icon,
+  iconBg,
+  iconColor,
+  label,
+  value,
 }: {
+  badge?: React.ReactNode;
   icon: React.ReactNode;
   iconBg: string;
   iconColor: string;
-  badge?: React.ReactNode;
   label: string;
   value: string;
 }) => (
-  <div className="bg-card p-6 rounded-xl shadow-card border border-border/50">
-    <div className="flex items-center justify-between mb-4">
-      <div className={`w-12 h-12 rounded-lg ${iconBg} flex items-center justify-center ${iconColor}`}>
-        {icon}
-      </div>
+  <div className="rounded-[28px] border border-border/50 bg-card p-6 shadow-card sm:p-7">
+    <div className="mb-4 flex items-center justify-between">
+      <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${iconBg} ${iconColor}`}>{icon}</div>
       {badge}
     </div>
-    <p className="text-muted-foreground text-sm font-medium mb-1">{label}</p>
+    <p className="mb-1 text-sm font-medium text-muted-foreground">{label}</p>
     <h3 className="text-2xl font-bold font-headline">{value}</h3>
   </div>
 );
