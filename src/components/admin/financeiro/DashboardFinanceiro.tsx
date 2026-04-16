@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Clock, AlertCircle, Download } from "lucide-react";
-import { useRelatorioFinanceiro, usePacientesComDebito } from "@/features/financeiro/api";
+import { useFinanceiroDevedores, useFinanceiroResumo } from "@/features/financeiro/api";
 import { toast } from "@/hooks/use-toast";
 
 export function DashboardFinanceiro() {
@@ -24,8 +24,13 @@ export function DashboardFinanceiro() {
 
   const [dataFim, setDataFim] = useState(new Date().toISOString().split("T")[0]);
 
-  const { data: relatorio, isLoading: relLoading } = useRelatorioFinanceiro(dataInicio, dataFim);
-  const { data: pacientesComDebito = [], isLoading: debtLoading } = usePacientesComDebito();
+  const { data: relatorio, isLoading: relLoading } = useFinanceiroResumo({
+    dataFim,
+    dataInicio,
+  });
+  const { data: pacientesComDebito = [], isLoading: debtLoading } = useFinanceiroDevedores({
+    limit: 10,
+  });
 
   const handleExportCSV = () => {
     if (!relatorio) {
@@ -148,7 +153,7 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
       </div>
 
       {/* Estatísticas */}
-      {relatorio && (
+      {relatorio && !relLoading && (
         <Card>
           <CardHeader>
             <CardTitle>Estatísticas do Período</CardTitle>
@@ -188,7 +193,7 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Paciente ID</TableHead>
+                  <TableHead>Paciente</TableHead>
                   <TableHead>Total Devido</TableHead>
                   <TableHead>Dias em Atraso</TableHead>
                   <TableHead>Faturas Vencidas</TableHead>
@@ -196,9 +201,14 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pacientesComDebito.slice(0, 10).map((paciente) => (
+                {pacientesComDebito.map((paciente) => (
                   <TableRow key={paciente.paciente_id}>
-                    <TableCell className="font-mono text-sm">{paciente.paciente_id}</TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{paciente.nome}</p>
+                        <p className="font-mono text-xs text-muted-foreground">{paciente.paciente_id}</p>
+                      </div>
+                    </TableCell>
                     <TableCell className="font-bold">
                       R$ {paciente.total_devido.toFixed(2).replace(".", ",")}
                     </TableCell>
@@ -222,7 +232,7 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
       </Card>
 
       {/* Resumo de Conversão */}
-      {relatorio && (
+      {relatorio && !relLoading && (
         <Card>
           <CardHeader>
             <CardTitle>Resumo do Período</CardTitle>

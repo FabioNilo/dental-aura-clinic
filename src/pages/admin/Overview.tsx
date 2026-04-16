@@ -15,12 +15,9 @@ import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import {
   useAtividadesRecentes,
-  useChartData,
-  useConfirmacoesIAHoje,
-  usePendenciasOperacionais,
+  useOverviewChartData,
+  useOverviewKpis,
   useProximosAgendamentos,
-  useSolicitacoesHoje,
-  useTotalPacientes,
 } from "@/hooks/useOverviewData";
 
 const activityIcons: Record<string, { icon: typeof CheckCircle; iconBg: string; iconColor: string }> = {
@@ -53,7 +50,7 @@ const quickActions = [
     color: "text-primary",
     cta: "/admin/solicitacoes",
     icon: ClipboardList,
-    label: "Abrir fila de solicitações",
+    label: "Abrir fila de solicitacoes",
     sub: "Revisar entradas do n8n e do time",
   },
   {
@@ -61,7 +58,7 @@ const quickActions = [
     color: "text-success",
     cta: "/admin/solicitacoes",
     icon: CheckCircle,
-    label: "Confirmar próximas entradas",
+    label: "Confirmar proximas entradas",
     sub: "Transformar pedidos em agendamentos",
   },
   {
@@ -75,11 +72,8 @@ const quickActions = [
 ];
 
 const Overview = () => {
-  const { data: totalPacientes, isLoading: loadingPacientes } = useTotalPacientes();
-  const { data: solicitacoesHoje, isLoading: loadingSolicitacoes } = useSolicitacoesHoje();
-  const { data: confirmacoesIA, isLoading: loadingConfirmacoes } = useConfirmacoesIAHoje();
-  const { data: pendencias, isLoading: loadingPendencias } = usePendenciasOperacionais();
-  const { data: chartData, isLoading: loadingChart } = useChartData();
+  const { data: kpis, isLoading: loadingKpis } = useOverviewKpis();
+  const { data: chartData, isLoading: loadingChart } = useOverviewChartData();
   const { data: atividades, isLoading: loadingAtividades } = useAtividadesRecentes();
   const { data: proximos, isLoading: loadingProximos } = useProximosAgendamentos();
 
@@ -87,10 +81,10 @@ const Overview = () => {
     <div className="space-y-10">
       <div>
         <h1 className="text-3xl font-extrabold font-headline text-foreground tracking-tight">
-          Operação da clínica
+          Operacao da clinica
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Acompanhe o volume da entrada por IA, o que já foi confirmado e o que ainda depende de decisão humana.
+          Acompanhe o volume da entrada por IA, o que ja foi confirmado e o que ainda depende de decisao humana.
         </p>
       </div>
 
@@ -100,15 +94,15 @@ const Overview = () => {
           iconBg="bg-accent"
           iconColor="text-primary"
           label="Pacientes ativos"
-          value={loadingPacientes ? "..." : (totalPacientes ?? 0).toLocaleString("pt-BR")}
+          value={loadingKpis ? "..." : (kpis?.total_pacientes ?? 0).toLocaleString("pt-BR")}
         />
         <KPICard
           badge={<span className="rounded-full bg-muted px-2 py-1 text-sm font-bold text-muted-foreground">Hoje</span>}
           icon={<ClipboardList className="h-5 w-5" />}
           iconBg="bg-surface-high"
           iconColor="text-muted-foreground"
-          label="Solicitações recebidas"
-          value={loadingSolicitacoes ? "..." : String(solicitacoesHoje ?? 0).padStart(2, "0")}
+          label="Solicitacoes recebidas"
+          value={loadingKpis ? "..." : String(kpis?.solicitacoes_hoje ?? 0).padStart(2, "0")}
         />
         <div className="rounded-xl bg-gradient-to-br from-primary to-primary-glow p-6 text-primary-foreground shadow-primary-glow">
           <div className="mb-4 flex items-center justify-between">
@@ -117,9 +111,9 @@ const Overview = () => {
             </div>
             <span className="rounded-full bg-white/10 px-2 py-1 text-sm font-bold">IA + n8n</span>
           </div>
-          <p className="mb-1 text-sm font-medium text-primary-foreground/70">Confirmações hoje</p>
+          <p className="mb-1 text-sm font-medium text-primary-foreground/70">Confirmacoes hoje</p>
           <h3 className="text-2xl font-bold font-headline">
-            {loadingConfirmacoes ? "..." : String(confirmacoesIA ?? 0).padStart(2, "0")}
+            {loadingKpis ? "..." : String(kpis?.confirmacoes_ia_hoje ?? 0).padStart(2, "0")}
           </h3>
         </div>
         <div className="rounded-xl border border-destructive/10 bg-destructive/10 p-6 shadow-card">
@@ -131,7 +125,7 @@ const Overview = () => {
           </div>
           <p className="mb-1 text-sm font-medium text-destructive/80">Fila operacional</p>
           <h3 className="text-2xl font-bold font-headline text-destructive">
-            {loadingPendencias ? "..." : String(pendencias ?? 0).padStart(2, "0")}
+            {loadingKpis ? "..." : String(kpis?.pendencias_operacionais ?? 0).padStart(2, "0")}
           </h3>
         </div>
       </div>
@@ -142,7 +136,7 @@ const Overview = () => {
             <div className="mb-8 flex items-center justify-between">
               <div>
                 <h4 className="text-lg font-bold font-headline">Entradas da semana</h4>
-                <p className="text-sm text-muted-foreground">Solicitações criadas nos últimos 7 dias</p>
+                <p className="text-sm text-muted-foreground">Solicitacoes criadas nos ultimos 7 dias</p>
               </div>
             </div>
             <div className="h-64">
@@ -230,7 +224,7 @@ const Overview = () => {
 
         <div className="space-y-8">
           <div className="rounded-[28px] bg-surface-high p-6 shadow-card sm:p-7 xl:p-8">
-            <h4 className="mb-6 text-lg font-bold font-headline">Ações rápidas</h4>
+            <h4 className="mb-6 text-lg font-bold font-headline">Acoes rapidas</h4>
             <div className="grid grid-cols-1 gap-3">
               {quickActions.map((item) => (
                 <Link key={item.label} to={item.cta}>
@@ -252,7 +246,7 @@ const Overview = () => {
 
           <div className="rounded-[28px] border border-border/50 bg-card p-6 shadow-card sm:p-7 xl:p-8">
             <div className="mb-6 flex items-center justify-between">
-              <h4 className="text-lg font-bold font-headline">Próximos agendamentos</h4>
+              <h4 className="text-lg font-bold font-headline">Proximos agendamentos</h4>
               <Link to="/admin/solicitacoes">
                 <Button size="sm" variant="outline">
                   Abrir fila
@@ -264,7 +258,7 @@ const Overview = () => {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : !proximos || proximos.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Nenhum agendamento próximo.</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">Nenhum agendamento proximo.</p>
             ) : (
               <div className="space-y-4">
                 {proximos.map((appointment, index) => (
@@ -295,7 +289,7 @@ const Overview = () => {
               <span className="text-xs font-bold uppercase tracking-wider text-primary">Leitura do MVP</span>
             </div>
             <p className="text-sm italic leading-relaxed text-muted-foreground">
-              "O gargalo atual não é capturar demanda, é sim validar rapidamente cada entrada. Priorize a fila de solicitações antes de expandir a agenda."
+              "O gargalo atual nao e capturar demanda, e sim validar rapidamente cada entrada. Priorize a fila de solicitacoes antes de expandir a agenda."
             </p>
           </div>
         </div>

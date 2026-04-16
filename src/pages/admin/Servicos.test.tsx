@@ -7,30 +7,39 @@ const createServicoMock = vi.fn();
 const updateServicoMock = vi.fn();
 const refetchMock = vi.fn();
 
+const servicoMock = {
+  ativo: true,
+  created_at: "2026-04-03T12:00:00.000Z",
+  descricao: "Atendimento inicial",
+  duracao_minutos: 60,
+  id: "serv-1",
+  nome: "Consulta geral",
+  preco: 180,
+  updated_at: "2026-04-03T12:00:00.000Z",
+};
+
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
 
 vi.mock("@/features/servicos/api", () => ({
-  useServicosAdminQuery: () => ({
-    data: [
-      {
-        ativo: true,
-        created_at: "2026-04-03T12:00:00.000Z",
-        descricao: "Atendimento inicial",
-        duracao_minutos: 60,
-        id: "serv-1",
-        nome: "Consulta geral",
-        preco: 180,
-        updated_at: "2026-04-03T12:00:00.000Z",
-      },
-    ],
-    isLoading: false,
-    refetch: refetchMock,
-  }),
   useCreateServico: () => ({
     isPending: false,
     mutateAsync: createServicoMock,
+  }),
+  useServicoById: () => ({
+    data: servicoMock,
+    isLoading: false,
+  }),
+  useServicosListQuery: () => ({
+    data: {
+      count: 1,
+      items: [servicoMock],
+      page: 1,
+      pageSize: 20,
+    },
+    isLoading: false,
+    refetch: refetchMock,
   }),
   useUpdateServico: () => ({
     isPending: false,
@@ -62,20 +71,20 @@ describe("Servicos page", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /novo servi./i }));
-    fireEvent.change(screen.getByLabelText(/nome do servi./i), {
+    fireEvent.click(screen.getByRole("button", { name: /novo servico/i }));
+    fireEvent.change(screen.getByLabelText(/nome do servico/i), {
       target: { value: "Clareamento" },
     });
-    fireEvent.change(screen.getByLabelText(/descri./i), {
+    fireEvent.change(screen.getByLabelText(/descricao/i), {
       target: { value: "Clareamento supervisionado em consultorio" },
     });
-    fireEvent.change(screen.getByLabelText(/dura..o m.dia \(min\)/i), {
+    fireEvent.change(screen.getByLabelText(/duracao media \(min\)/i), {
       target: { value: "90" },
     });
-    fireEvent.change(screen.getByLabelText(/pre.o base/i), {
+    fireEvent.change(screen.getByLabelText(/preco base/i), {
       target: { value: "450,00" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /criar servi./i }));
+    fireEvent.click(screen.getByRole("button", { name: /criar servico/i }));
 
     await waitFor(() => {
       expect(createServicoMock).toHaveBeenCalledWith({

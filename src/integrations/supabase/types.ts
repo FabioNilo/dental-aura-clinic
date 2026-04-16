@@ -361,6 +361,57 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_financeiro_devedores: {
+        Args: {
+          p_limit?: number;
+          p_paciente_id?: string | null;
+        };
+        Returns: {
+          dias_atraso: number;
+          email: string | null;
+          nome: string;
+          paciente_id: string;
+          quantidade_faturas_vencidas: number;
+          telefone: string | null;
+          total_devido: number;
+        }[];
+      };
+      rpc_financeiro_resumo: {
+        Args: {
+          p_data_fim: string;
+          p_data_inicio: string;
+          p_paciente_id?: string | null;
+        };
+        Returns: {
+          periodo_fim: string;
+          periodo_inicio: string;
+          quantidade_faturas: number;
+          quantidade_faturas_pagas: number;
+          quantidade_faturas_pendentes: number;
+          taxa_recebimento: number;
+          total_desconto_aplicado: number;
+          total_faturado: number;
+          total_pendente: number;
+          total_recebido: number;
+          total_vencido: number;
+        }[];
+      };
+      rpc_overview_chart_semana: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          day: string;
+          value: number;
+        }[];
+      };
+      rpc_overview_kpis: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          confirmacoes_ia_hoje: number;
+          pendencias_operacionais: number;
+          solicitacoes_hoje: number;
+          total_pacientes: number;
+        }[];
+      };
       generate_solicitacao_codigo_externo: {
         Args: Record<PropertyKey, never>;
         Returns: string;
@@ -374,7 +425,10 @@ export type Database = {
       };
       remarcar_solicitacao_agendamento: {
         Args: {
+          p_data_hora?: string | null;
           p_observacoes_admin?: string | null;
+          p_profissional_id?: string | null;
+          p_servico_id?: string | null;
           p_solicitacao_id: string;
         };
         Returns: string;

@@ -1,122 +1,70 @@
 import { useQuery } from "@tanstack/react-query";
-import { endOfDay, format, startOfDay, subDays } from "date-fns";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { SOLICITACAO_PENDING_STATUSES } from "@/features/solicitacoes/api";
+import type { Tables } from "@/integrations/supabase/types";
+import { queryPresets } from "@/lib/react-query";
+import type { OverviewChartPoint, OverviewKpis } from "@/types/api";
 
-export function useTotalPacientes() {
+type AtividadeResumo = Pick<Tables<"atividades">, "created_at" | "descricao" | "id" | "tipo" | "titulo">;
+
+type ProximoAgendamento = {
+  detail: string;
+  id: string;
+  initials: string;
+  name: string;
+  time: string;
+};
+
+export function useOverviewKpis() {
   return useQuery({
-    queryKey: ["overview", "total-pacientes"],
+    ...queryPresets.operational,
+    queryKey: ["overview", "kpis"],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("pacientes")
-        .select("*", { count: "exact", head: true })
-        .eq("ativo", true);
+      const { data, error } = await supabase.rpc("rpc_overview_kpis");
 
       if (error) {
         throw error;
       }
 
-      return count ?? 0;
+      const row = data?.[0];
+
+      return {
+        confirmacoes_ia_hoje: Number(row?.confirmacoes_ia_hoje ?? 0),
+        pendencias_operacionais: Number(row?.pendencias_operacionais ?? 0),
+        solicitacoes_hoje: Number(row?.solicitacoes_hoje ?? 0),
+        total_pacientes: Number(row?.total_pacientes ?? 0),
+      } satisfies OverviewKpis;
     },
   });
 }
 
-export function useSolicitacoesHoje() {
+export function useOverviewChartData() {
   return useQuery({
-    queryKey: ["overview", "solicitacoes-hoje"],
+    ...queryPresets.operational,
+    queryKey: ["overview", "chart-semana"],
     queryFn: async () => {
-      const now = new Date();
-      const { count, error } = await supabase
-        .from("solicitacoes_agendamento")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", startOfDay(now).toISOString())
-        .lte("created_at", endOfDay(now).toISOString());
+      const { data, error } = await supabase.rpc("rpc_overview_chart_semana");
 
       if (error) {
         throw error;
       }
 
-      return count ?? 0;
-    },
-  });
-}
-
-export function useConfirmacoesIAHoje() {
-  return useQuery({
-    queryKey: ["overview", "confirmacoes-ia-hoje"],
-    queryFn: async () => {
-      const now = new Date();
-      const { count, error } = await supabase
-        .from("solicitacoes_agendamento")
-        .select("*", { count: "exact", head: true })
-        .eq("canal_origem", "n8n")
-        .eq("status", "agendado")
-        .gte("updated_at", startOfDay(now).toISOString())
-        .lte("updated_at", endOfDay(now).toISOString());
-
-      if (error) {
-        throw error;
-      }
-
-      return count ?? 0;
-    },
-  });
-}
-
-export function usePendenciasOperacionais() {
-  return useQuery({
-    queryKey: ["overview", "pendencias-operacionais"],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from("solicitacoes_agendamento")
-        .select("*", { count: "exact", head: true })
-        .in("status", [...SOLICITACAO_PENDING_STATUSES]);
-
-      if (error) {
-        throw error;
-      }
-
-      return count ?? 0;
-    },
-  });
-}
-
-export function useChartData() {
-  return useQuery({
-    queryKey: ["chart-agendamentos-semana"],
-    queryFn: async () => {
-      const days: { day: string; value: number }[] = [];
-
-      for (let index = 6; index >= 0; index -= 1) {
-        const date = subDays(new Date(), index);
-        const { count, error } = await supabase
-          .from("solicitacoes_agendamento")
-          .select("*", { count: "exact", head: true })
-          .gte("created_at", startOfDay(date).toISOString())
-          .lte("created_at", endOfDay(date).toISOString());
-
-        if (error) {
-          throw error;
-        }
-
-        days.push({
-          day: format(date, "dd/MM"),
-          value: count ?? 0,
-        });
-      }
-
-      return days;
+      return (data ?? []).map((row) => ({
+        day: String(row.day ?? ""),
+        value: Number(row.value ?? 0),
+      })) satisfies OverviewChartPoint[];
     },
   });
 }
 
 export function useAtividadesRecentes() {
   return useQuery({
-    queryKey: ["atividades-recentes"],
+    ...queryPresets.operational,
+    queryKey: ["overview", "atividades-recentes"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("atividades")
-        .select("*")
+        .select("id, tipo, titulo, descricao, created_at")
         .order("created_at", { ascending: false })
         .limit(6);
 
@@ -124,13 +72,14 @@ export function useAtividadesRecentes() {
         throw error;
       }
 
-      return data ?? [];
+      return (data ?? []) as AtividadeResumo[];
     },
   });
 }
 
 export function useProximosAgendamentos() {
   return useQuery({
+    ...queryPresets.operational,
     queryKey: ["proximos-agendamentos"],
     queryFn: async () => {
       const now = new Date();
@@ -147,7 +96,7 @@ export function useProximosAgendamentos() {
       }
 
       if (!data || data.length === 0) {
-        return [];
+        return [] satisfies ProximoAgendamento[];
       }
 
       const pacienteIds = [...new Set(data.map((item) => item.paciente_id))];
@@ -202,7 +151,7 @@ export function useProximosAgendamentos() {
           name: patientName,
           time: `${format(start, "HH:mm")} - ${format(end, "HH:mm")}`,
         };
-      });
+      }) satisfies ProximoAgendamento[];
     },
   });
 }

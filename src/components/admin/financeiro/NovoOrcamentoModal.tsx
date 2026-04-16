@@ -3,9 +3,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,46 +18,45 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Check } from "lucide-react";
 import { PacienteAutocomplete } from "./PacienteAutocomplete";
-import { useCriarOrcamento, useServiços, type PacienteComCPF } from "@/features/financeiro/api";
-import { type Servico } from "@/features/financeiro/types";
+import { useCriarOrcamento, useServicos, type PacienteComCPF } from "@/features/financeiro/api";
+import type { Servico } from "@/features/financeiro/types";
 import { toast } from "@/hooks/use-toast";
 
 interface NovoOrcamentoModalProps {
-  open: boolean;
   onOpenChange: (open: boolean) => void;
   onSucesso?: () => void;
+  open: boolean;
 }
 
 interface ItemOrcamento {
-  temId?: string;
-  servico_id: string;
-  servico_nome: string;
   preco_unitario: number;
   quantidade: number;
+  servico_id: string;
+  servico_nome: string;
+  tempId?: string;
 }
 
 export function NovoOrcamentoModal({ open, onOpenChange, onSucesso }: NovoOrcamentoModalProps) {
   const [pacienteSelecionado, setPacienteSelecionado] = useState<PacienteComCPF | null>(null);
-  const [servico_id, setServico_id] = useState("");
+  const [servicoId, setServicoId] = useState("");
   const [quantidade, setQuantidade] = useState("1");
   const [itens, setItens] = useState<ItemOrcamento[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  const { data: servicos = [] } = useServiços();
+  const { data: servicos = [] } = useServicos();
   const criarOrcamento = useCriarOrcamento();
 
-  const servicoSelecionado = servicos.find((s: Servico) => s.id === servico_id);
+  const servicoSelecionado = servicos.find((servico: Servico) => servico.id === servicoId);
 
   const handleAdicionarItem = () => {
-    if (!servico_id || !servicoSelecionado) {
-      toast({ title: "Erro", description: "Selecione um serviço", variant: "destructive" });
+    if (!servicoId || !servicoSelecionado) {
+      toast({ title: "Erro", description: "Selecione um servico", variant: "destructive" });
       return;
     }
 
-    if (!quantidade || parseInt(quantidade) <= 0) {
+    if (!quantidade || Number.parseInt(quantidade, 10) <= 0) {
       toast({
         title: "Erro",
         description: "Quantidade deve ser maior que 0",
@@ -67,20 +66,20 @@ export function NovoOrcamentoModal({ open, onOpenChange, onSucesso }: NovoOrcame
     }
 
     const novoItem: ItemOrcamento = {
-      temId: Math.random().toString(),
-      servico_id,
-      servico_nome: servicoSelecionado.nome,
       preco_unitario: servicoSelecionado.preco,
-      quantidade: parseInt(quantidade),
+      quantidade: Number.parseInt(quantidade, 10),
+      servico_id: servicoId,
+      servico_nome: servicoSelecionado.nome,
+      tempId: Math.random().toString(),
     };
 
-    setItens([...itens, novoItem]);
-    setServico_id("");
+    setItens((current) => [...current, novoItem]);
+    setServicoId("");
     setQuantidade("1");
   };
 
-  const handleRemoverItem = (temId: string | undefined) => {
-    setItens(itens.filter((item) => item.temId !== temId));
+  const handleRemoverItem = (tempId: string | undefined) => {
+    setItens((current) => current.filter((item) => item.tempId !== tempId));
   };
 
   const handleSalvar = async () => {
@@ -96,50 +95,47 @@ export function NovoOrcamentoModal({ open, onOpenChange, onSucesso }: NovoOrcame
     if (itens.length === 0) {
       toast({
         title: "Erro",
-        description: "Adicione pelo menos um item ao orçamento",
+        description: "Adicione pelo menos um item ao orcamento",
         variant: "destructive",
       });
       return;
     }
 
     setSalvando(true);
+
     try {
-      const valorTotal = itens.reduce(
-        (sum, item) => sum + item.preco_unitario * item.quantidade,
-        0
-      );
+      const valorTotal = itens.reduce((sum, item) => sum + item.preco_unitario * item.quantidade, 0);
 
       await criarOrcamento.mutateAsync({
+        desconto_tipo: null,
+        desconto_valor: 0,
+        itens: itens.map((item) => ({
+          descricao: item.servico_nome,
+          preco_unitario: item.preco_unitario,
+          quantidade: item.quantidade,
+          servico_id: item.servico_id,
+        })),
         paciente_id: pacienteSelecionado.id,
         prontuario_id: null,
         status: "rascunho",
         valor_total: valorTotal,
-        desconto_tipo: null,
-        desconto_valor: 0,
-        itens: itens.map((item: ItemOrcamento) => ({
-          servico_id: item.servico_id,
-          descricao: item.servico_nome,
-          preco_unitario: item.preco_unitario,
-          quantidade: item.quantidade,
-        })),
       });
 
       toast({
         title: "Sucesso",
-        description: "Orçamento criado com sucesso",
+        description: "Orcamento criado com sucesso",
       });
 
-      // Limpar
       setPacienteSelecionado(null);
       setItens([]);
-      setServico_id("");
+      setServicoId("");
       setQuantidade("1");
       onOpenChange(false);
       onSucesso?.();
-    } catch (error) {
+    } catch {
       toast({
         title: "Erro",
-        description: "Erro ao criar orçamento",
+        description: "Erro ao criar orcamento",
         variant: "destructive",
       });
     } finally {
@@ -147,21 +143,17 @@ export function NovoOrcamentoModal({ open, onOpenChange, onSucesso }: NovoOrcame
     }
   };
 
-  const calculoValorTotal = itens.reduce(
-    (sum, item) => sum + item.preco_unitario * item.quantidade,
-    0
-  );
+  const valorTotal = itens.reduce((sum, item) => sum + item.preco_unitario * item.quantidade, 0);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo Orçamento</DialogTitle>
-          <DialogDescription>Crie um novo orçamento para o paciente</DialogDescription>
+          <DialogTitle>Novo Orcamento</DialogTitle>
+          <DialogDescription>Crie um novo orcamento para o paciente</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Seleção de Paciente */}
           <div>
             <Label htmlFor="paciente">Paciente *</Label>
             <PacienteAutocomplete
@@ -170,24 +162,23 @@ export function NovoOrcamentoModal({ open, onOpenChange, onSucesso }: NovoOrcame
             />
           </div>
 
-          {pacienteSelecionado && (
+          {pacienteSelecionado ? (
             <>
-              {/* Adição de Itens */}
               <Card>
-                <CardContent className="pt-6 space-y-4">
-                  <h3 className="font-medium text-sm">Adicionar Itens</h3>
+                <CardContent className="space-y-4 pt-6">
+                  <h3 className="text-sm font-medium">Adicionar Itens</h3>
 
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <Label htmlFor="servico">Serviço</Label>
-                      <Select value={servico_id} onValueChange={setServico_id}>
+                      <Label htmlFor="servico">Servico</Label>
+                      <Select onValueChange={setServicoId} value={servicoId}>
                         <SelectTrigger id="servico">
                           <SelectValue placeholder="Selecione..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {servicos.map((s: Servico) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.nome} - R$ {s.preco.toFixed(2).replace(".", ",")}
+                          {servicos.map((servico: Servico) => (
+                            <SelectItem key={servico.id} value={servico.id}>
+                              {servico.nome} - R$ {servico.preco.toFixed(2).replace(".", ",")}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -198,95 +189,87 @@ export function NovoOrcamentoModal({ open, onOpenChange, onSucesso }: NovoOrcame
                       <Label htmlFor="quantidade">Quantidade</Label>
                       <Input
                         id="quantidade"
-                        type="number"
                         min="1"
-                        value={quantidade}
                         onChange={(e) => setQuantidade(e.target.value)}
                         placeholder="1"
+                        type="number"
+                        value={quantidade}
                       />
                     </div>
 
                     <div className="flex items-end">
-                      <Button
-                        onClick={handleAdicionarItem}
-                        disabled={!servico_id}
-                        className="w-full gap-2"
-                      >
+                      <Button className="w-full gap-2" disabled={!servicoId} onClick={handleAdicionarItem}>
                         <Plus className="h-4 w-4" />
                         Adicionar
                       </Button>
                     </div>
                   </div>
 
-                  {servicoSelecionado && (
+                  {servicoSelecionado ? (
                     <div className="text-sm text-muted-foreground">
-                      Subtotal: R${" "}
-                      {(
-                        servicoSelecionado.preco * parseInt(quantidade || "1")
-                      )
+                      Subtotal: R$ {(servicoSelecionado.preco * Number.parseInt(quantidade || "1", 10))
                         .toFixed(2)
                         .replace(".", ",")}
                     </div>
-                  )}
+                  ) : null}
                 </CardContent>
               </Card>
 
-              {/* Lista de Itens */}
-              {itens.length > 0 && (
+              {itens.length > 0 ? (
                 <Card>
                   <CardContent className="pt-6">
-                    <h3 className="font-medium text-sm mb-4">Itens do Orçamento</h3>
+                    <h3 className="mb-4 text-sm font-medium">Itens do Orcamento</h3>
                     <div className="space-y-3">
-                      {itens.map((item, idx) => (
+                      {itens.map((item) => (
                         <div
-                          key={item.temId}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
+                          className="flex items-center justify-between rounded-md bg-gray-50 p-3"
+                          key={item.tempId}
                         >
                           <div className="flex-1">
-                            <p className="font-medium text-sm">{item.servico_nome}</p>
+                            <p className="text-sm font-medium">{item.servico_nome}</p>
                             <p className="text-xs text-muted-foreground">
-                              {item.quantidade}x R$ {item.preco_unitario.toFixed(2).replace(".", ",")} =
-                              R$ {(item.preco_unitario * item.quantidade).toFixed(2).replace(".", ",")}
+                              {item.quantidade}x R$ {item.preco_unitario.toFixed(2).replace(".", ",")} = R${" "}
+                              {(item.preco_unitario * item.quantidade).toFixed(2).replace(".", ",")}
                             </p>
                           </div>
                           <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoverItem(item.temId)}
                             className="text-red-500 hover:text-red-600"
+                            onClick={() => handleRemoverItem(item.tempId)}
+                            size="sm"
+                            variant="ghost"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       ))}
 
-                      <div className="pt-3 border-t-2 flex justify-between items-center font-bold">
+                      <div className="flex items-center justify-between border-t-2 pt-3 font-bold">
                         <span>Total:</span>
-                        <span>R$ {calculoValorTotal.toFixed(2).replace(".", ",")}</span>
+                        <span>R$ {valorTotal.toFixed(2).replace(".", ",")}</span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              )}
+              ) : null}
             </>
-          )}
+          ) : null}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button onClick={() => onOpenChange(false)} variant="outline">
             Cancelar
           </Button>
           <Button
-            onClick={handleSalvar}
-            disabled={!pacienteSelecionado || itens.length === 0 || salvando}
             className="gap-2"
+            disabled={!pacienteSelecionado || itens.length === 0 || salvando}
+            onClick={handleSalvar}
           >
             {salvando ? (
               <>Salvando...</>
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                Criar Orçamento
+                Criar Orcamento
               </>
             )}
           </Button>

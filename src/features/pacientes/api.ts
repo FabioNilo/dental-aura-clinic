@@ -1,9 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { queryPresets } from "@/lib/react-query";
+import type { PaginatedResult } from "@/types/api";
 
 export type PacienteRecord = Tables<"pacientes">;
 export type PacienteStatusFilter = "all" | "active" | "inactive";
+export type PacienteListItem = Pick<
+  Tables<"pacientes">,
+  "ativo" | "cpf" | "data_nascimento" | "email" | "endereco" | "id" | "nome" | "observacoes" | "telefone"
+>;
 export type PacienteHistoricoAgendamento = Pick<
   Tables<"agendamentos">,
   "created_at" | "data_hora" | "duracao_minutos" | "id" | "origem" | "status"
@@ -29,7 +35,9 @@ export type PacienteOperacaoContext = {
   recentesSolicitacoes: PacienteHistoricoSolicitacao[];
 };
 
-export type PacientesFilters = {
+export type PacientesListFilters = {
+  page: number;
+  pageSize: number;
   search: string;
   status: PacienteStatusFilter;
 };
@@ -59,24 +67,31 @@ function normalizePhone(value: string | null | undefined) {
 
 function invalidatePacienteData(queryClient: ReturnType<typeof useQueryClient>) {
   return Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["pacientes-admin"] }),
+    queryClient.invalidateQueries({ queryKey: ["pacientes-list"] }),
+    queryClient.invalidateQueries({ queryKey: ["paciente"] }),
     queryClient.invalidateQueries({ queryKey: ["paciente-operacao-context"] }),
     queryClient.invalidateQueries({ queryKey: ["overview"] }),
     queryClient.invalidateQueries({ queryKey: ["proximos-agendamentos"] }),
   ]);
 }
 
-export function usePacientesAdminQuery(filters: PacientesFilters) {
+export function usePacientesListQuery(filters: PacientesListFilters) {
   return useQuery({
-    queryKey: ["pacientes-admin", filters],
+    ...queryPresets.search,
+    placeholderData: keepPreviousData,
+    queryKey: ["pacientes-list", filters],
     queryFn: async () => {
+      const from = (filters.page - 1) * filters.pageSize;
+      const to = from + filters.pageSize - 1;
+
       let query = supabase
         .from("pacientes")
-        .select(
-          "id, nome, telefone, email, cpf, data_nascimento, endereco, observacoes, ativo, created_at, updated_at",
-        )
+        .select("id, nome, telefone, email, cpf, data_nascimento, endereco, observacoes, ativo", {
+          count: "exact",
+        })
         .order("ativo", { ascending: false })
-        .order("nome", { ascending: true });
+        .order("nome", { ascending: true })
+        .range(from, to);
 
       if (filters.status === "active") {
         query = query.eq("ativo", true);
@@ -94,13 +109,41 @@ export function usePacientesAdminQuery(filters: PacientesFilters) {
         );
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) {
         throw error;
       }
 
-      return (data ?? []) as PacienteRecord[];
+      return {
+        count: count ?? 0,
+        items: (data ?? []) as PacienteListItem[],
+        page: filters.page,
+        pageSize: filters.pageSize,
+      } satisfies PaginatedResult<PacienteListItem>;
+    },
+  });
+}
+
+export function usePacienteById(pacienteId: string | null | undefined) {
+  return useQuery({
+    ...queryPresets.detail,
+    enabled: Boolean(pacienteId),
+    queryKey: ["paciente", pacienteId ?? null],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pacientes")
+        .select(
+          "id, nome, telefone, email, cpf, data_nascimento, endereco, observacoes, ativo, created_at, updated_at",
+        )
+        .eq("id", pacienteId!)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? null) as PacienteRecord | null;
     },
   });
 }
@@ -186,6 +229,7 @@ export function usePacienteOperacaoContext(filters: PacienteOperacaoFilters) {
   const normalizedPhone = normalizePhone(filters.telefone);
 
   return useQuery({
+    ...queryPresets.detail,
     enabled: (filters.enabled ?? true) && Boolean(filters.pacienteId || normalizedPhone),
     queryKey: ["paciente-operacao-context", filters.pacienteId ?? null, normalizedPhone, filters.limit ?? 5],
     queryFn: async () => {

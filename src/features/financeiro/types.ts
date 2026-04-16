@@ -94,6 +94,11 @@ export interface Orcamento {
   itens?: OrcamentoItem[];
 }
 
+export type OrcamentoListItem = Pick<
+  Orcamento,
+  "created_at" | "data_emissao" | "data_validade" | "id" | "paciente_id" | "status" | "valor_total"
+>;
+
 export type CreateOrcamentoInput = {
   paciente_id: string;
   prontuario_id?: string | null;
@@ -150,6 +155,18 @@ export interface Fatura {
   updated_at?: string;
   itens?: FaturaItem[];
 }
+
+export type FaturaListItem = Pick<
+  Fatura,
+  | "data_emissao"
+  | "data_vencimento"
+  | "id"
+  | "numero_nf"
+  | "paciente_id"
+  | "status"
+  | "valor_pago"
+  | "valor_total"
+>;
 
 export type CreateFaturaInput = {
   paciente_id: string;
@@ -260,6 +277,8 @@ export type OrcamentoFilters = {
   status?: OrcamentoStatusType | OrcamentoStatusType[];
   data_inicio?: string;
   data_fim?: string;
+  page?: number;
+  pageSize?: number;
   limit?: number;
   offset?: number;
 };
@@ -270,6 +289,8 @@ export type FaturaFilters = {
   data_inicio?: string;
   data_fim?: string;
   apenas_vencidas?: boolean;
+  page?: number;
+  pageSize?: number;
   limit?: number;
   offset?: number;
 };

@@ -7,31 +7,40 @@ const createProfissionalMock = vi.fn();
 const updateProfissionalMock = vi.fn();
 const refetchMock = vi.fn();
 
+const profissionalMock = {
+  ativo: true,
+  created_at: "2026-04-03T12:00:00.000Z",
+  cro: "SP 12345",
+  email: "juliana@clinica.com",
+  especialidade: "Ortodontia",
+  id: "prof-1",
+  nome: "Dra. Juliana Sampaio",
+  telefone: "(11) 99999-9999",
+  updated_at: "2026-04-03T12:00:00.000Z",
+};
+
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
 
 vi.mock("@/features/profissionais/api", () => ({
-  useProfissionaisAdminQuery: () => ({
-    data: [
-      {
-        ativo: true,
-        created_at: "2026-04-03T12:00:00.000Z",
-        cro: "SP 12345",
-        email: "juliana@clinica.com",
-        especialidade: "Ortodontia",
-        id: "prof-1",
-        nome: "Dra. Juliana Sampaio",
-        telefone: "(11) 99999-9999",
-        updated_at: "2026-04-03T12:00:00.000Z",
-      },
-    ],
-    isLoading: false,
-    refetch: refetchMock,
-  }),
   useCreateProfissional: () => ({
     isPending: false,
     mutateAsync: createProfissionalMock,
+  }),
+  useProfissionalById: () => ({
+    data: profissionalMock,
+    isLoading: false,
+  }),
+  useProfissionaisListQuery: () => ({
+    data: {
+      count: 1,
+      items: [profissionalMock],
+      page: 1,
+      pageSize: 20,
+    },
+    isLoading: false,
+    refetch: refetchMock,
   }),
   useUpdateProfissional: () => ({
     isPending: false,

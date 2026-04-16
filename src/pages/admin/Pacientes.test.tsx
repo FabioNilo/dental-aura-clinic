@@ -7,33 +7,42 @@ const createPacienteMock = vi.fn();
 const updatePacienteMock = vi.fn();
 const refetchMock = vi.fn();
 
+const pacienteMock = {
+  ativo: true,
+  cpf: "11122233344",
+  created_at: "2026-04-03T12:00:00.000Z",
+  data_nascimento: "1989-03-12",
+  email: "maria@clinica.com",
+  endereco: "Rua A, 10",
+  id: "pac-1",
+  nome: "Maria Souza",
+  observacoes: "Paciente recorrente",
+  telefone: "(11) 99999-8888",
+  updated_at: "2026-04-03T12:00:00.000Z",
+};
+
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
 
 vi.mock("@/features/pacientes/api", () => ({
-  usePacientesAdminQuery: () => ({
-    data: [
-      {
-        ativo: true,
-        cpf: "11122233344",
-        created_at: "2026-04-03T12:00:00.000Z",
-        data_nascimento: "1989-03-12",
-        email: "maria@clinica.com",
-        endereco: "Rua A, 10",
-        id: "pac-1",
-        nome: "Maria Souza",
-        observacoes: "Paciente recorrente",
-        telefone: "(11) 99999-8888",
-        updated_at: "2026-04-03T12:00:00.000Z",
-      },
-    ],
-    isLoading: false,
-    refetch: refetchMock,
-  }),
   useCreatePaciente: () => ({
     isPending: false,
     mutateAsync: createPacienteMock,
+  }),
+  usePacienteById: () => ({
+    data: pacienteMock,
+    isLoading: false,
+  }),
+  usePacientesListQuery: () => ({
+    data: {
+      count: 1,
+      items: [pacienteMock],
+      page: 1,
+      pageSize: 20,
+    },
+    isLoading: false,
+    refetch: refetchMock,
   }),
   useUpdatePaciente: () => ({
     isPending: false,

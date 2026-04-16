@@ -1,6 +1,7 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
+  Bot,
   CalendarClock,
   FileJson2,
   History,
@@ -15,7 +16,16 @@ import {
 import { Link, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -30,9 +40,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { usePacienteOperacaoContext } from "@/features/pacientes/api";
+import { getErrorMessage } from "@/lib/errors";
 import {
+  type ProfissionalOption,
   SOLICITACAO_PENDING_STATUSES,
   SOLICITACAO_STATUS_OPTIONS,
+  type ServicoOption,
   type SolicitacaoRecord,
   useCancelarSolicitacao,
   useConfirmarSolicitacao,
@@ -54,6 +67,13 @@ type CreateFormState = {
   tipoAtendimento: "" | "convenio" | "particular";
   turnoDesejado: "" | "comercial" | "manha" | "noite" | "tarde";
 };
+type RemarcacaoFormState = {
+  confirmaAtualizacaoAgendamento: boolean;
+  dataHora: string;
+  observacoesAdmin: string;
+  profissionalId: string;
+  servicoId: string;
+};
 
 const PAGE_SIZE = 10;
 const CREATE_SOLICITACAO_DEFAULTS: CreateFormState = {
@@ -65,6 +85,13 @@ const CREATE_SOLICITACAO_DEFAULTS: CreateFormState = {
   telefoneCliente: "",
   tipoAtendimento: "",
   turnoDesejado: "",
+};
+const REMARCACAO_DEFAULTS: RemarcacaoFormState = {
+  confirmaAtualizacaoAgendamento: false,
+  dataHora: "",
+  observacoesAdmin: "",
+  profissionalId: "",
+  servicoId: "",
 };
 
 const statusMeta: Record<
@@ -170,6 +197,25 @@ function toDateTimeLocalValue(selected: SolicitacaoRecord | null) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function toIsoStringFromLocalValue(value: string) {
+  return value ? new Date(value).toISOString() : null;
+}
+
+function hasRemarcacaoAgendaChanges(
+  selected: SolicitacaoRecord | null,
+  form: RemarcacaoFormState,
+) {
+  if (!selected?.agendamento_id) {
+    return false;
+  }
+
+  return Boolean(
+    form.dataHora ||
+      (form.profissionalId && form.profissionalId !== (selected.profissional_id ?? "")) ||
+      (form.servicoId && form.servicoId !== (selected.servico_id ?? "")),
+  );
+}
+
 const Solicitacoes = () => {
   const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
@@ -183,6 +229,8 @@ const Solicitacoes = () => {
   const [dataHora, setDataHora] = useState("");
   const [observacoesAdmin, setObservacoesAdmin] = useState("");
   const [createForm, setCreateForm] = useState<CreateFormState>(CREATE_SOLICITACAO_DEFAULTS);
+  const [remarcacaoModalOpen, setRemarcacaoModalOpen] = useState(false);
+  const [remarcacaoForm, setRemarcacaoForm] = useState<RemarcacaoFormState>(REMARCACAO_DEFAULTS);
 
   const deferredSearch = useDeferredValue(search);
   const targetSolicitacaoId = searchParams.get("solicitacaoId");
@@ -215,6 +263,15 @@ const Solicitacoes = () => {
   });
 
   const isPendingSelected = selected ? SOLICITACAO_PENDING_STATUSES.includes(selected.status as never) : false;
+  const remarcacaoVaiAtualizarAgenda = hasRemarcacaoAgendaChanges(selected, remarcacaoForm);
+  const remarcacaoDataAtual = selected?.data_hora_confirmada
+    ? formatDateTime(selected.data_hora_confirmada)
+    : selected?.dia_desejado
+      ? `${formatDate(selected.dia_desejado)} · ${selected.turno_desejado ?? "Sem turno"}`
+      : "Nao informada";
+  const remarcacaoNovaData = remarcacaoForm.dataHora
+    ? formatDateTime(toIsoStringFromLocalValue(remarcacaoForm.dataHora))
+    : "Sem nova data proposta";
 
   useEffect(() => {
     if (isCreatingNew) {
@@ -237,7 +294,15 @@ const Solicitacoes = () => {
       setObservacoesAdmin(selected.observacoes_admin ?? "");
       setProfissionalId(selected.profissional_id ?? "");
       setServicoId(selected.servico_id ?? "");
+      setRemarcacaoForm({
+        confirmaAtualizacaoAgendamento: false,
+        dataHora: "",
+        observacoesAdmin: selected.observacoes_admin ?? "",
+        profissionalId: selected.profissional_id ?? "",
+        servicoId: selected.servico_id ?? "",
+      });
       setActionMode(null);
+      setRemarcacaoModalOpen(false);
     }
   }, [selected?.id]);
 
@@ -262,10 +327,36 @@ const Solicitacoes = () => {
     }));
   };
 
+  const handleRemarcacaoFieldChange = <K extends keyof RemarcacaoFormState>(
+    field: K,
+    value: RemarcacaoFormState[K],
+  ) => {
+    setRemarcacaoForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
   const handleNewSolicitacao = () => {
     setIsCreatingNew(true);
     setActionMode(null);
     setCreateForm(CREATE_SOLICITACAO_DEFAULTS);
+  };
+
+  const handleOpenRemarcacaoModal = () => {
+    if (!selected) {
+      return;
+    }
+
+    setActionMode(null);
+    setRemarcacaoForm({
+      confirmaAtualizacaoAgendamento: false,
+      dataHora: "",
+      observacoesAdmin: selected.observacoes_admin ?? "",
+      profissionalId: selected.profissional_id ?? "",
+      servicoId: selected.servico_id ?? "",
+    });
+    setRemarcacaoModalOpen(true);
   };
 
   const handleCriarSolicitacao = async () => {
@@ -301,8 +392,7 @@ const Solicitacoes = () => {
         description: `${created.nome_cliente} entrou na fila operacional com sucesso.`,
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Nao foi possivel criar a solicitacao manual.";
+      const message = getErrorMessage(error, "Nao foi possivel criar a solicitacao manual.");
 
       toast({
         title: "Falha ao criar",
@@ -343,8 +433,7 @@ const Solicitacoes = () => {
       setActionMode(null);
       await solicitacoesQuery.refetch();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Nao foi possivel confirmar a solicitacao.";
+      const message = getErrorMessage(error, "Nao foi possivel confirmar a solicitacao.");
 
       toast({
         title: "Falha ao confirmar",
@@ -359,22 +448,48 @@ const Solicitacoes = () => {
       return;
     }
 
+    const hasLinkedAgendaChanges = hasRemarcacaoAgendaChanges(selected, remarcacaoForm);
+    const novaDataIso = toIsoStringFromLocalValue(remarcacaoForm.dataHora);
+
+    if (novaDataIso && new Date(novaDataIso).getTime() <= Date.now()) {
+      toast({
+        title: "Data invalida",
+        description: "Escolha uma data e hora futuras para a remarcacao.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (hasLinkedAgendaChanges && !remarcacaoForm.confirmaAtualizacaoAgendamento) {
+      toast({
+        title: "Confirmacao necessaria",
+        description: "Confirme no modal que o agendamento vinculado pode ser atualizado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       await remarcarMutation.mutateAsync({
-        observacoesAdmin,
+        confirmaAtualizacaoAgendamento: remarcacaoForm.confirmaAtualizacaoAgendamento,
+        dataHora: novaDataIso,
+        observacoesAdmin: remarcacaoForm.observacoesAdmin.trim() || undefined,
+        profissionalId: remarcacaoForm.profissionalId || null,
+        servicoId: remarcacaoForm.servicoId || null,
         solicitacaoId: selected.id,
       });
 
       toast({
         title: "Solicitacao atualizada",
-        description: "A solicitacao foi marcada para remarcacao.",
+        description: novaDataIso
+          ? "A solicitacao foi enviada para nova confirmacao com data sugerida."
+          : "A solicitacao foi marcada para remarcacao.",
       });
 
-      setActionMode(null);
+      setRemarcacaoModalOpen(false);
       await solicitacoesQuery.refetch();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Nao foi possivel marcar a remarcacao.";
+      const message = getErrorMessage(error, "Nao foi possivel marcar a remarcacao.");
 
       toast({
         title: "Falha ao remarcar",
@@ -403,8 +518,7 @@ const Solicitacoes = () => {
       setActionMode(null);
       await solicitacoesQuery.refetch();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Nao foi possivel cancelar a solicitacao.";
+      const message = getErrorMessage(error, "Nao foi possivel cancelar a solicitacao.");
 
       toast({
         title: "Falha ao cancelar",
@@ -520,7 +634,14 @@ const Solicitacoes = () => {
                           <TableCell className="font-semibold">{item.codigo_externo}</TableCell>
                           <TableCell>
                             <div>
-                              <p className="font-semibold text-foreground">{item.nome_cliente}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-foreground">{item.nome_cliente}</p>
+                                {item.canal_origem === "n8n" ? (
+                                  <Badge className="border-primary/15 bg-primary/10 text-primary" variant="outline">
+                                    IA
+                                  </Badge>
+                                ) : null}
+                              </div>
                               <p className="text-xs text-muted-foreground">{item.telefone_cliente}</p>
                             </div>
                           </TableCell>
@@ -728,9 +849,17 @@ const Solicitacoes = () => {
                       {selected.codigo_externo}
                     </p>
                     <h2 className="mt-2 text-2xl font-bold font-headline">{selected.nome_cliente}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Entrada via {selected.origem} / {selected.canal_origem}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <span>
+                        Entrada via {selected.origem} / {selected.canal_origem}
+                      </span>
+                      {selected.canal_origem === "n8n" ? (
+                        <Badge className="border-primary/15 bg-primary/10 text-primary" variant="outline">
+                          <Bot className="mr-1 h-3.5 w-3.5" />
+                          Remarcacao vinda da IA
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {selected.agendamento_id && selected.data_hora_confirmada ? (
@@ -917,9 +1046,9 @@ const Solicitacoes = () => {
                     </Button>
                     <Button
                       disabled={selected.status === "cancelado"}
-                      onClick={() => setActionMode("remarcar")}
+                      onClick={handleOpenRemarcacaoModal}
                       type="button"
-                      variant={actionMode === "remarcar" ? "default" : "outline"}
+                      variant="outline"
                     >
                       Remarcar
                     </Button>
@@ -1054,9 +1183,216 @@ const Solicitacoes = () => {
           </CardContent>
         </Card>
       </div>
+
+      <RemarcacaoDialog
+        busy={remarcarMutation.isPending}
+        currentDateLabel={remarcacaoDataAtual}
+        form={remarcacaoForm}
+        iaOrigin={selected?.canal_origem === "n8n"}
+        onChange={handleRemarcacaoFieldChange}
+        onOpenChange={setRemarcacaoModalOpen}
+        onSubmit={() => void handleRemarcar()}
+        open={remarcacaoModalOpen}
+        profissionais={profissionaisQuery.data ?? []}
+        requiresAgendaConfirmation={remarcacaoVaiAtualizarAgenda}
+        selected={selected}
+        servicos={servicosQuery.data ?? []}
+        suggestedDateLabel={remarcacaoNovaData}
+      />
     </div>
   );
 };
+
+function RemarcacaoDialog({
+  busy,
+  currentDateLabel,
+  form,
+  iaOrigin,
+  onChange,
+  onOpenChange,
+  onSubmit,
+  open,
+  profissionais,
+  requiresAgendaConfirmation,
+  selected,
+  servicos,
+  suggestedDateLabel,
+}: {
+  busy: boolean;
+  currentDateLabel: string;
+  form: RemarcacaoFormState;
+  iaOrigin: boolean;
+  onChange: <K extends keyof RemarcacaoFormState>(field: K, value: RemarcacaoFormState[K]) => void;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: () => void;
+  open: boolean;
+  profissionais: ProfissionalOption[];
+  requiresAgendaConfirmation: boolean;
+  selected: SolicitacaoRecord | null;
+  servicos: ServicoOption[];
+  suggestedDateLabel: string;
+}) {
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Remarcar solicitacao</DialogTitle>
+          <DialogDescription>
+            Defina uma nova proposta de data para a solicitacao e, se quiser, ajuste profissional e servico.
+          </DialogDescription>
+        </DialogHeader>
+
+        {selected ? (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-foreground">{selected.nome_cliente}</p>
+                <Badge variant="outline">{selected.codigo_externo}</Badge>
+                {iaOrigin ? (
+                  <Badge className="border-primary/15 bg-primary/10 text-primary" variant="outline">
+                    <Bot className="mr-1 h-3.5 w-3.5" />
+                    Solicitacao da IA
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                A data e hora sao opcionais. Quando preenchidas, a solicitacao volta para{" "}
+                <span className="font-medium text-foreground">aguardando confirmacao</span>.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Data atual
+                </p>
+                <p className="mt-2 text-sm font-medium text-foreground">{currentDateLabel}</p>
+              </div>
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+                  Nova proposta
+                </p>
+                <p className="mt-2 text-sm font-medium text-foreground">{suggestedDateLabel}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="remarcacao-data-hora">Nova data e hora</Label>
+                <Badge className="border-border bg-background text-muted-foreground" variant="outline">
+                  Opcional
+                </Badge>
+              </div>
+              <Input
+                id="remarcacao-data-hora"
+                min={toDateTimeLocalValue(null)}
+                onChange={(event) => onChange("dataHora", event.target.value)}
+                type="datetime-local"
+                value={form.dataHora}
+              />
+              <p className="text-xs text-muted-foreground">
+                Se voce nao preencher, a remarcacao sera registrada sem nova data proposta.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="remarcacao-profissional">Profissional</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  id="remarcacao-profissional"
+                  onChange={(event) => onChange("profissionalId", event.target.value)}
+                  value={form.profissionalId}
+                >
+                  <option value="">Manter atual</option>
+                  {profissionais.map((profissional) => (
+                    <option key={profissional.id} value={profissional.id}>
+                      {profissional.nome}
+                      {profissional.especialidade ? ` · ${profissional.especialidade}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="remarcacao-servico">Servico</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  id="remarcacao-servico"
+                  onChange={(event) => onChange("servicoId", event.target.value)}
+                  value={form.servicoId}
+                >
+                  <option value="">Manter atual</option>
+                  {servicos.map((servico) => (
+                    <option key={servico.id} value={servico.id}>
+                      {servico.nome}
+                      {servico.preco ? ` · ${formatCurrency(servico.preco)}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="remarcacao-observacoes-admin">Observacoes da remarcacao</Label>
+              <Textarea
+                id="remarcacao-observacoes-admin"
+                onChange={(event) => onChange("observacoesAdmin", event.target.value)}
+                placeholder="Explique a remarcacao e mantenha o historico administrativo"
+                value={form.observacoesAdmin}
+              />
+            </div>
+
+            {selected.turno_desejado ? (
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+                Turno atual da solicitacao: <span className="font-medium text-foreground">{selected.turno_desejado}</span>.
+                Se voce informar nova data e hora, o turno sera recalculado automaticamente.
+              </div>
+            ) : null}
+
+            {requiresAgendaConfirmation ? (
+              <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={form.confirmaAtualizacaoAgendamento}
+                    id="confirmar-atualizacao-agendamento"
+                    onCheckedChange={(checked) => onChange("confirmaAtualizacaoAgendamento", Boolean(checked))}
+                  />
+                  <div>
+                    <Label
+                      className="cursor-pointer text-sm font-semibold text-foreground"
+                      htmlFor="confirmar-atualizacao-agendamento"
+                    >
+                      Confirmo que o agendamento vinculado pode ser atualizado na agenda
+                    </Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Como essa solicitacao ja possui agendamento associado, salvar a remarcacao vai refletir a nova
+                      proposta diretamente na agenda.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+            Fechar
+          </Button>
+          <Button
+            disabled={busy || (requiresAgendaConfirmation && !form.confirmaAtualizacaoAgendamento)}
+            onClick={onSubmit}
+            type="button"
+          >
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Salvar remarcacao
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function ActionNoteForm({
   busy,

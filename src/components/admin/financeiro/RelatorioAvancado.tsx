@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,11 +19,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Download, FileText } from "lucide-react";
-import { useRelatorioFinanceiro, usePacientesComDebito, useFaturas } from "@/features/financeiro/api";
+import { useFaturas, useFinanceiroDevedores, useFinanceiroResumo } from "@/features/financeiro/api";
 import { toast } from "@/hooks/use-toast";
-import type { FaturaFilters, FaturaStatusType, PacienteComDebito, Fatura } from "@/features/financeiro/types";
+import type { FaturaFilters, FaturaListItem, FaturaStatusType, PacienteComDebito } from "@/features/financeiro/types";
 
 type ViewType = "resumo" | "devedores" | "faturas" | "mensalista";
+
+const PAGE_SIZE = 20;
 
 export function RelatorioAvancado() {
   const [viewType, setViewType] = useState<ViewType>("resumo");
@@ -34,24 +36,34 @@ export function RelatorioAvancado() {
   });
   const [dataFim, setDataFim] = useState(new Date().toISOString().split("T")[0]);
   const [statusFiltro, setStatusFiltro] = useState<string>("todos");
+  const [page, setPage] = useState(1);
 
-  const { data: relatorio } = useRelatorioFinanceiro(dataInicio, dataFim);
-  const { data: pacientesComDebito = [] } = usePacientesComDebito();
+  const { data: relatorio } = useFinanceiroResumo({
+    dataFim,
+    dataInicio,
+  });
+  const { data: pacientesComDebito = [] } = useFinanceiroDevedores({ limit: 20 });
 
   const filters: FaturaFilters = {
-    data_inicio: dataInicio,
     data_fim: dataFim,
-    status:
-      statusFiltro === "todos"
-        ? undefined
-        : (statusFiltro as FaturaStatusType),
+    data_inicio: dataInicio,
+    page,
+    pageSize: PAGE_SIZE,
+    status: statusFiltro === "todos" ? undefined : (statusFiltro as FaturaStatusType),
   };
-  const { data: faturas = [] } = useFaturas(filters);
+  const { data: faturasResult } = useFaturas(filters);
+  const faturas = faturasResult?.items ?? [];
+  const totalFaturas = faturasResult?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFaturas / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [dataFim, dataInicio, statusFiltro, viewType]);
 
   const handleExportPDF = () => {
     toast({
       title: "Em desenvolvimento",
-      description: "Export PDF será implementado em breve",
+      description: "Export PDF sera implementado em breve",
     });
   };
 
@@ -61,9 +73,12 @@ export function RelatorioAvancado() {
 
     switch (viewType) {
       case "resumo":
-        if (!relatorio) return;
-        csv = `RELATÓRIO FINANCEIRO - PERÍODO
-Período,${relatorio.periodo.inicio} a ${relatorio.periodo.fim}
+        if (!relatorio) {
+          return;
+        }
+
+        csv = `RELATORIO FINANCEIRO - PERIODO
+Periodo,${relatorio.periodo.inicio} a ${relatorio.periodo.fim}
 ---
 Total Faturado,R$ ${relatorio.total_faturado.toFixed(2)}
 Total Recebido,R$ ${relatorio.total_recebido.toFixed(2)}
@@ -79,20 +94,24 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
         break;
 
       case "devedores":
-        csv = "RELATÓRIO DE DEVEDORES\nPaciente ID,Total Devido,Dias em Atraso,Faturas Vencidas,Status\n";
+        csv = "RELATORIO DE DEVEDORES\nPaciente,Paciente ID,Total Devido,Dias em Atraso,Faturas Vencidas,Status\n";
         pacientesComDebito.forEach((p) => {
-          csv += `${p.paciente_id},R$ ${p.total_devido.toFixed(2)},${p.dias_atraso},${p.quantidade_faturas_vencidas},"${p.dias_atraso > 30 ? "Crítico" : p.dias_atraso > 0 ? "Atraso" : "OK"}"\n`;
+          const status = p.dias_atraso > 30 ? "Critico" : p.dias_atraso > 0 ? "Atraso" : "OK";
+          csv += `"${p.nome}",${p.paciente_id},R$ ${p.total_devido.toFixed(2)},${p.dias_atraso},${p.quantidade_faturas_vencidas},${status}\n`;
         });
         filename = `relatorio-devedores-${new Date().toISOString().split("T")[0]}.csv`;
         break;
 
       case "faturas":
-        csv = "RELATÓRIO DE FATURAS\nNumero NF,Data Emissão,Vencimento,Status,Valor Total,Valor Pago,Saldo\n";
+        csv = "RELATORIO DE FATURAS\nNumero NF,Data Emissao,Vencimento,Status,Valor Total,Valor Pago,Saldo\n";
         faturas.forEach((f) => {
           const saldo = f.valor_total - f.valor_pago;
           csv += `${f.numero_nf || "N/A"},${f.data_emissao},${f.data_vencimento || "N/A"},${f.status},R$ ${f.valor_total.toFixed(2)},R$ ${f.valor_pago.toFixed(2)},R$ ${saldo.toFixed(2)}\n`;
         });
-        filename = `relatorio-faturas-${dataInicio}-${dataFim}.csv`;
+        filename = `relatorio-faturas-${dataInicio}-${dataFim}-pagina-${page}.csv`;
+        break;
+
+      default:
         break;
     }
 
@@ -115,27 +134,26 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
 
     toast({
       title: "Sucesso",
-      description: "Relatório exportado com sucesso",
+      description: "Relatorio exportado com sucesso",
     });
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Relatórios Financeiros</h2>
-        <p className="text-sm text-muted-foreground">Gere relatórios personalizados e exporte dados</p>
+        <h2 className="text-2xl font-bold">Relatorios Financeiros</h2>
+        <p className="text-sm text-muted-foreground">Gere relatorios personalizados e exporte dados</p>
       </div>
 
-      {/* Filtros */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Filtros</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
-              <label className="text-sm font-medium">Tipo de Relatório</label>
-              <Select value={viewType} onValueChange={(v) => setViewType(v as ViewType)}>
+              <label className="text-sm font-medium">Tipo de Relatorio</label>
+              <Select value={viewType} onValueChange={(value) => setViewType(value as ViewType)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -149,24 +167,16 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
             </div>
 
             <div>
-              <label className="text-sm font-medium">Data Início</label>
-              <Input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-              />
+              <label className="text-sm font-medium">Data Inicio</label>
+              <Input onChange={(e) => setDataInicio(e.target.value)} type="date" value={dataInicio} />
             </div>
 
             <div>
               <label className="text-sm font-medium">Data Fim</label>
-              <Input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-              />
+              <Input onChange={(e) => setDataFim(e.target.value)} type="date" value={dataFim} />
             </div>
 
-            {viewType === "faturas" && (
+            {viewType === "faturas" ? (
               <div>
                 <label className="text-sm font-medium">Status</label>
                 <Select value={statusFiltro} onValueChange={setStatusFiltro}>
@@ -183,28 +193,27 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={handleExportCSV} variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
+            <Button onClick={handleExportCSV} size="sm" variant="outline">
+              <Download className="mr-2 h-4 w-4" />
               Exportar CSV
             </Button>
-            <Button onClick={handleExportPDF} variant="outline" size="sm">
-              <FileText className="h-4 w-4 mr-2" />
+            <Button onClick={handleExportPDF} size="sm" variant="outline">
+              <FileText className="mr-2 h-4 w-4" />
               Exportar PDF (em breve)
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Conteúdo por Tipo */}
-      {viewType === "resumo" && relatorio && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {viewType === "resumo" && relatorio ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Resumo do Período</CardTitle>
+              <CardTitle>Resumo do Periodo</CardTitle>
               <CardDescription>
                 {relatorio.periodo.inicio} a {relatorio.periodo.fim}
               </CardDescription>
@@ -246,7 +255,7 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
           <Card>
             <CardHeader>
               <CardTitle>Indicadores</CardTitle>
-              <CardDescription>Métricas de desempenho</CardDescription>
+              <CardDescription>Metricas de desempenho</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between border-b pb-2">
@@ -268,24 +277,22 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
             </CardContent>
           </Card>
         </div>
-      )}
+      ) : null}
 
-      {viewType === "devedores" && (
+      {viewType === "devedores" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Pacientes com Débito</CardTitle>
+            <CardTitle>Pacientes com Debito</CardTitle>
             <CardDescription>Classificados por valor devido</CardDescription>
           </CardHeader>
           <CardContent>
             {pacientesComDebito.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Nenhum débito registrado
-              </div>
+              <div className="py-8 text-center text-muted-foreground">Nenhum debito registrado</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Paciente ID</TableHead>
+                    <TableHead>Paciente</TableHead>
                     <TableHead>Total Devido</TableHead>
                     <TableHead>Dias em Atraso</TableHead>
                     <TableHead>Faturas Vencidas</TableHead>
@@ -293,18 +300,23 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pacientesComDebito.map((p: PacienteComDebito) => (
-                    <TableRow key={p.paciente_id}>
-                      <TableCell className="font-mono text-sm">{p.paciente_id}</TableCell>
-                      <TableCell className="font-bold">
-                        R$ {p.total_devido.toFixed(2).replace(".", ",")}
-                      </TableCell>
-                      <TableCell>{p.dias_atraso} dias</TableCell>
-                      <TableCell>{p.quantidade_faturas_vencidas}</TableCell>
+                  {pacientesComDebito.map((paciente: PacienteComDebito) => (
+                    <TableRow key={paciente.paciente_id}>
                       <TableCell>
-                        {p.dias_atraso > 30 ? (
-                          <Badge variant="destructive">Crítico</Badge>
-                        ) : p.dias_atraso > 0 ? (
+                        <div>
+                          <p className="font-medium">{paciente.nome}</p>
+                          <p className="font-mono text-xs text-muted-foreground">{paciente.paciente_id}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-bold">
+                        R$ {paciente.total_devido.toFixed(2).replace(".", ",")}
+                      </TableCell>
+                      <TableCell>{paciente.dias_atraso} dias</TableCell>
+                      <TableCell>{paciente.quantidade_faturas_vencidas}</TableCell>
+                      <TableCell>
+                        {paciente.dias_atraso > 30 ? (
+                          <Badge variant="destructive">Critico</Badge>
+                        ) : paciente.dias_atraso > 0 ? (
                           <Badge variant="secondary">Atraso</Badge>
                         ) : (
                           <Badge>OK</Badge>
@@ -317,27 +329,25 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
             )}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {viewType === "faturas" && (
+      {viewType === "faturas" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Faturas ({faturas.length})</CardTitle>
+            <CardTitle>Faturas ({totalFaturas})</CardTitle>
             <CardDescription>
-              Período: {dataInicio} a {dataFim}
+              Periodo: {dataInicio} a {dataFim}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {faturas.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Nenhuma fatura encontrada
-              </div>
+              <div className="py-8 text-center text-muted-foreground">Nenhuma fatura encontrada</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Número NF</TableHead>
-                    <TableHead>Data Emissão</TableHead>
+                    <TableHead>Numero NF</TableHead>
+                    <TableHead>Data Emissao</TableHead>
                     <TableHead>Vencimento</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Valor Total</TableHead>
@@ -346,27 +356,25 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {faturas.map((f: Fatura) => {
-                    const saldo = f.valor_total - f.valor_pago;
+                  {faturas.map((fatura: FaturaListItem) => {
+                    const saldo = fatura.valor_total - fatura.valor_pago;
                     return (
-                      <TableRow key={f.id}>
-                        <TableCell className="font-mono">{f.numero_nf || "N/A"}</TableCell>
+                      <TableRow key={fatura.id}>
+                        <TableCell className="font-mono">{fatura.numero_nf || "N/A"}</TableCell>
+                        <TableCell>{new Date(fatura.data_emissao).toLocaleDateString("pt-BR")}</TableCell>
                         <TableCell>
-                          {new Date(f.data_emissao).toLocaleDateString("pt-BR")}
-                        </TableCell>
-                        <TableCell>
-                          {f.data_vencimento
-                            ? new Date(f.data_vencimento).toLocaleDateString("pt-BR")
+                          {fatura.data_vencimento
+                            ? new Date(fatura.data_vencimento).toLocaleDateString("pt-BR")
                             : "N/A"}
                         </TableCell>
                         <TableCell>
-                          <Badge>{f.status}</Badge>
+                          <Badge>{fatura.status}</Badge>
                         </TableCell>
-                        <TableCell>R$ {f.valor_total.toFixed(2).replace(".", ",")}</TableCell>
+                        <TableCell>R$ {fatura.valor_total.toFixed(2).replace(".", ",")}</TableCell>
                         <TableCell className="text-green-600">
-                          R$ {f.valor_pago.toFixed(2).replace(".", ",")}
+                          R$ {fatura.valor_pago.toFixed(2).replace(".", ",")}
                         </TableCell>
-                        <TableCell className={saldo > 0 ? "text-red-600 font-bold" : ""}>
+                        <TableCell className={saldo > 0 ? "font-bold text-red-600" : ""}>
                           R$ {saldo.toFixed(2).replace(".", ",")}
                         </TableCell>
                       </TableRow>
@@ -375,21 +383,49 @@ Faturas Pendentes,${relatorio.quantidade_faturas_pendentes}`;
                 </TableBody>
               </Table>
             )}
+
+            {totalFaturas > 0 ? (
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Pagina {page} de {totalPages}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    disabled={page === 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Proxima
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {viewType === "mensalista" && (
+      {viewType === "mensalista" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Análise Mensalista</CardTitle>
+            <CardTitle>Analise Mensalista</CardTitle>
             <CardDescription>Em desenvolvimento</CardDescription>
           </CardHeader>
-          <CardContent className="text-center py-8 text-muted-foreground">
-            Relatório de clientes mensalistas será implementado em breve
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Relatorio de clientes mensalistas sera implementado em breve
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

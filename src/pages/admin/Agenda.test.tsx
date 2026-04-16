@@ -111,6 +111,12 @@ describe("Agenda page", () => {
     fireEvent.change(screen.getByLabelText(/observacoes/i), {
       target: { value: "Atendimento realizado com sucesso." },
     });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/status do agendamento/i)).toHaveValue("concluido");
+      expect(screen.getByLabelText(/observacoes/i)).toHaveValue("Atendimento realizado com sucesso.");
+    });
+
     fireEvent.click(screen.getByRole("button", { name: /salvar atualizacao/i }));
 
     await waitFor(() => {

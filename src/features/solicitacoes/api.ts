@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import { getErrorMessage } from "@/lib/errors";
 
 export const SOLICITACAO_STATUS_OPTIONS = [
   "novo",
@@ -58,6 +59,15 @@ export type ConfirmarSolicitacaoInput = {
 
 export type AtualizarSolicitacaoInput = {
   observacoesAdmin?: string;
+  solicitacaoId: string;
+};
+
+export type RemarcarSolicitacaoInput = {
+  confirmaAtualizacaoAgendamento?: boolean;
+  dataHora?: string | null;
+  observacoesAdmin?: string;
+  profissionalId?: string | null;
+  servicoId?: string | null;
   solicitacaoId: string;
 };
 
@@ -124,6 +134,26 @@ async function invalidateClinicData(queryClient: ReturnType<typeof useQueryClien
   ]);
 }
 
+function isRpcSignatureMismatch(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String(error.code ?? "") : "";
+  const message = "message" in error ? String(error.message ?? "") : "";
+
+  return (
+    code === "PGRST202" ||
+    code === "PGRST203" ||
+    message.includes("Could not find the function public.remarcar_solicitacao_agendamento") ||
+    message.includes("remarcar_solicitacao_agendamento")
+  );
+}
+
+function toQueryError(error: unknown, fallback: string) {
+  return new Error(getErrorMessage(error, fallback));
+}
+
 export function useSolicitacoesQuery(filters: SolicitacaoFilters) {
   return useQuery({
     queryKey: ["solicitacoes", filters],
@@ -150,7 +180,7 @@ export function useSolicitacoesQuery(filters: SolicitacaoFilters) {
       const { data, error, count } = await query;
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel carregar as solicitacoes.");
       }
 
       return {
@@ -175,7 +205,7 @@ export function useProfissionaisOptions() {
         .order("nome", { ascending: true });
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel carregar os profissionais.");
       }
 
       return (data ?? []) as ProfissionalOption[];
@@ -194,7 +224,7 @@ export function useServicosOptions() {
         .order("nome", { ascending: true });
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel carregar os servicos.");
       }
 
       return (data ?? []) as ServicoOption[];
@@ -217,7 +247,7 @@ export function useSolicitacaoVinculadaQuery(agendamentoId?: string | null) {
         .maybeSingle();
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel carregar a solicitacao vinculada.");
       }
 
       return (data ?? null) as SolicitacaoLinkedRecord | null;
@@ -239,7 +269,7 @@ export function useConfirmarSolicitacao() {
       });
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel confirmar a solicitacao.");
       }
 
       return data;
@@ -292,7 +322,7 @@ export function useCreateSolicitacao() {
         .single();
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel criar a solicitacao manual.");
       }
 
       return data as SolicitacaoRecord;
@@ -307,14 +337,39 @@ export function useRemarcarSolicitacao() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: AtualizarSolicitacaoInput) => {
-      const { data, error } = await supabase.rpc("remarcar_solicitacao_agendamento", {
+    mutationFn: async (input: RemarcarSolicitacaoInput) => {
+      const nextPayload = {
+        p_data_hora: input.dataHora ?? null,
         p_observacoes_admin: input.observacoesAdmin ?? null,
+        p_profissional_id: input.profissionalId ?? null,
+        p_servico_id: input.servicoId ?? null,
         p_solicitacao_id: input.solicitacaoId,
-      });
+      };
+      const { data, error } = await supabase.rpc("remarcar_solicitacao_agendamento", nextPayload);
+
+      if (error && isRpcSignatureMismatch(error)) {
+        const hasNewFields = Boolean(input.dataHora || input.profissionalId || input.servicoId);
+
+        if (hasNewFields) {
+          throw new Error(
+            "A remarcacao com nova data, profissional ou servico precisa da migration 20260410000005_update_remarcacao_solicitacao.sql aplicada no Supabase.",
+          );
+        }
+
+        const legacyResult = await supabase.rpc("remarcar_solicitacao_agendamento", {
+          p_observacoes_admin: input.observacoesAdmin ?? null,
+          p_solicitacao_id: input.solicitacaoId,
+        });
+
+        if (legacyResult.error) {
+          throw toQueryError(legacyResult.error, "Nao foi possivel marcar a remarcacao.");
+        }
+
+        return legacyResult.data;
+      }
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel marcar a remarcacao.");
       }
 
       return data;
@@ -336,7 +391,7 @@ export function useCancelarSolicitacao() {
       });
 
       if (error) {
-        throw error;
+        throw toQueryError(error, "Nao foi possivel cancelar a solicitacao.");
       }
 
       return data;

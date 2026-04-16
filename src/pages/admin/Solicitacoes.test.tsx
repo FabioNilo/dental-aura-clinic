@@ -30,16 +30,38 @@ vi.mock("@/features/solicitacoes/api", () => ({
     "cancelamento_solicitado",
     "cancelado",
   ],
+  useCancelarSolicitacao: () => ({
+    isPending: false,
+    mutateAsync: cancelarMutateAsyncMock,
+  }),
+  useConfirmarSolicitacao: () => ({
+    isPending: false,
+    mutateAsync: confirmarMutateAsyncMock,
+  }),
+  useCreateSolicitacao: () => ({
+    isPending: false,
+    mutateAsync: createSolicitacaoMutateAsyncMock,
+  }),
+  useProfissionaisOptions: () => ({
+    data: [{ especialidade: "Clinica geral", id: "prof-1", nome: "Dra. Ana" }],
+  }),
+  useRemarcarSolicitacao: () => ({
+    isPending: false,
+    mutateAsync: remarcarMutateAsyncMock,
+  }),
+  useServicosOptions: () => ({
+    data: [{ duracao_minutos: 60, id: "serv-1", nome: "Consulta geral", preco: 180 }],
+  }),
   useSolicitacoesQuery: () => ({
     data: {
       count: 1,
       items: [
         {
-          agendamento_id: null,
+          agendamento_id: "ag-1",
           canal_origem: "n8n",
           codigo_externo: "SOL-20260403-000001",
           created_at: "2026-04-03T12:00:00.000Z",
-          data_hora_confirmada: null,
+          data_hora_confirmada: "2026-04-05T14:30:00.000Z",
           dia_desejado: "2026-04-05",
           id: "sol-1",
           nome_cliente: "Maria Souza",
@@ -64,28 +86,6 @@ vi.mock("@/features/solicitacoes/api", () => ({
     },
     isLoading: false,
     refetch: refetchMock,
-  }),
-  useProfissionaisOptions: () => ({
-    data: [{ id: "prof-1", nome: "Dra. Ana", especialidade: "Clinica geral" }],
-  }),
-  useServicosOptions: () => ({
-    data: [{ duracao_minutos: 60, id: "serv-1", nome: "Consulta geral", preco: 180 }],
-  }),
-  useConfirmarSolicitacao: () => ({
-    isPending: false,
-    mutateAsync: confirmarMutateAsyncMock,
-  }),
-  useCreateSolicitacao: () => ({
-    isPending: false,
-    mutateAsync: createSolicitacaoMutateAsyncMock,
-  }),
-  useRemarcarSolicitacao: () => ({
-    isPending: false,
-    mutateAsync: remarcarMutateAsyncMock,
-  }),
-  useCancelarSolicitacao: () => ({
-    isPending: false,
-    mutateAsync: cancelarMutateAsyncMock,
   }),
 }));
 
@@ -121,6 +121,7 @@ describe("Solicitacoes page", () => {
     createSolicitacaoMutateAsyncMock.mockReset();
     refetchMock.mockReset();
     confirmarMutateAsyncMock.mockResolvedValue("ag-1");
+    remarcarMutateAsyncMock.mockResolvedValue("sol-1");
     createSolicitacaoMutateAsyncMock.mockResolvedValue({
       agendamento_id: null,
       canal_origem: "painel_admin",
@@ -155,24 +156,62 @@ describe("Solicitacoes page", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
-    fireEvent.change(screen.getByLabelText("Profissional"), {
+    fireEvent.change(screen.getByLabelText(/profissional/i), {
       target: { value: "prof-1" },
     });
-    fireEvent.change(screen.getByLabelText("Servico"), {
+    fireEvent.change(screen.getByLabelText(/servi.o/i), {
       target: { value: "serv-1" },
     });
-    fireEvent.change(screen.getByLabelText("Data e hora"), {
+    fireEvent.change(screen.getByLabelText(/data e hora/i), {
       target: { value: "2026-04-05T14:30" },
     });
-    fireEvent.change(screen.getByLabelText("Observacoes admin"), {
+    fireEvent.change(screen.getByLabelText(/observa..es admin/i), {
       target: { value: "Paciente confirmado no periodo da tarde." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar solicitacao" }));
+    fireEvent.click(screen.getByRole("button", { name: /confirmar solicita/i }));
 
     await waitFor(() => {
       expect(confirmarMutateAsyncMock).toHaveBeenCalledWith({
         dataHora: new Date("2026-04-05T14:30").toISOString(),
         observacoesAdmin: "Paciente confirmado no periodo da tarde.",
+        profissionalId: "prof-1",
+        servicoId: "serv-1",
+        solicitacaoId: "sol-1",
+      });
+    });
+  });
+
+  it("opens the remarcacao modal and saves a new proposed date", async () => {
+    render(
+      <MemoryRouter>
+        <Solicitacoes />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remarcar" }));
+
+    expect(screen.getByRole("dialog", { name: /remarcar solicitacao/i })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/nova data e hora/i), {
+      target: { value: "2026-04-20T11:00" },
+    });
+    fireEvent.change(screen.getByLabelText(/profissional/i), {
+      target: { value: "prof-1" },
+    });
+    fireEvent.change(screen.getByLabelText(/servico|servi.o/i), {
+      target: { value: "serv-1" },
+    });
+    fireEvent.change(screen.getByLabelText(/observa..es da remarca/i), {
+      target: { value: "Paciente pediu novo horario." },
+    });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /salvar remarcacao/i }));
+
+    await waitFor(() => {
+      expect(remarcarMutateAsyncMock).toHaveBeenCalledWith({
+        confirmaAtualizacaoAgendamento: true,
+        dataHora: new Date("2026-04-20T11:00").toISOString(),
+        observacoesAdmin: "Paciente pediu novo horario.",
         profissionalId: "prof-1",
         servicoId: "serv-1",
         solicitacaoId: "sol-1",
@@ -187,32 +226,32 @@ describe("Solicitacoes page", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Nova solicitacao" }));
-    fireEvent.change(screen.getByLabelText("Nome do paciente"), {
+    fireEvent.click(screen.getByRole("button", { name: /nova solicita/i }));
+    fireEvent.change(screen.getByLabelText(/nome do paciente/i), {
       target: { value: "Joao Pereira" },
     });
-    fireEvent.change(screen.getByLabelText("Telefone"), {
+    fireEvent.change(screen.getByLabelText(/telefone/i), {
       target: { value: "11977776666" },
     });
-    fireEvent.change(screen.getByLabelText("Procedimento"), {
+    fireEvent.change(screen.getByLabelText(/procedimento/i), {
       target: { value: "Avaliacao" },
     });
-    fireEvent.change(screen.getByLabelText("Dia desejado"), {
+    fireEvent.change(screen.getByLabelText(/dia desejado/i), {
       target: { value: "2026-04-08" },
     });
-    fireEvent.change(screen.getByLabelText("Turno desejado"), {
+    fireEvent.change(screen.getByLabelText(/turno desejado/i), {
       target: { value: "comercial" },
     });
-    fireEvent.change(screen.getByLabelText("Tipo de atendimento"), {
+    fireEvent.change(screen.getByLabelText(/tipo de atendimento/i), {
       target: { value: "particular" },
     });
-    fireEvent.change(screen.getByLabelText("Observacoes do contato"), {
+    fireEvent.change(screen.getByLabelText(/observa..es do contato/i), {
       target: { value: "Prefere horario comercial." },
     });
-    fireEvent.change(screen.getByLabelText("Observacoes admin"), {
+    fireEvent.change(screen.getByLabelText(/observa..es admin/i), {
       target: { value: "Ligou pela recepcao." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Criar solicitacao" }));
+    fireEvent.click(screen.getByRole("button", { name: /criar solicita/i }));
 
     await waitFor(() => {
       expect(createSolicitacaoMutateAsyncMock).toHaveBeenCalledWith({

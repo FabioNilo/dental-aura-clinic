@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Phone, Mail, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,26 +6,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { usePacientesAdminQuery } from "@/features/pacientes/api";
+import { usePacienteById } from "@/features/pacientes/api";
 import { useProntuariosPaciente, useProntuarioById } from "@/features/prontuarios/api";
 import { ProntuarioForm, TratamentoSection } from "@/components/admin/prontuario";
-import type { PacienteRecord } from "@/features/pacientes/api";
 
 export function PacienteDetalhes() {
   const { pacienteId } = useParams<{ pacienteId: string }>();
   const navigate = useNavigate();
   const [selectedProntuarioId, setSelectedProntuarioId] = useState<string | null>(null);
 
-  const pacientesQuery = usePacientesAdminQuery({ search: "", status: "all" });
+  const pacienteQuery = usePacienteById(pacienteId ?? null);
   const prontuariosQuery = useProntuariosPaciente({
     paciente_id: pacienteId!,
   });
   const selectedProntuarioQuery = useProntuarioById(selectedProntuarioId);
 
-  const paciente = useMemo(() => {
-    return (pacientesQuery.data ?? []).find((p) => p.id === pacienteId);
-  }, [pacientesQuery.data, pacienteId]);
-
+  const paciente = pacienteQuery.data;
   const prontuarios = useMemo(() => prontuariosQuery.data ?? [], [prontuariosQuery.data]);
 
   useEffect(() => {
@@ -37,12 +33,12 @@ export function PacienteDetalhes() {
   if (!pacienteId) {
     return (
       <div className="p-6">
-        <p className="text-muted-foreground">Paciente não encontrado</p>
+        <p className="text-muted-foreground">Paciente nao encontrado</p>
       </div>
     );
   }
 
-  if (pacientesQuery.isLoading || prontuariosQuery.isLoading) {
+  if (pacienteQuery.isLoading || prontuariosQuery.isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -53,14 +49,13 @@ export function PacienteDetalhes() {
   if (!paciente) {
     return (
       <div className="p-6">
-        <p className="text-muted-foreground">Paciente não encontrado</p>
+        <p className="text-muted-foreground">Paciente nao encontrado</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button
@@ -81,11 +76,10 @@ export function PacienteDetalhes() {
       <Separator />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Informações do Paciente */}
         <aside className="lg:col-span-1">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Informações Pessoais</CardTitle>
+              <CardTitle className="text-lg">Informacoes Pessoais</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {paciente.telefone && (
@@ -129,14 +123,14 @@ export function PacienteDetalhes() {
 
               {paciente.endereco && (
                 <div>
-                  <p className="text-xs text-muted-foreground">Endereço</p>
+                  <p className="text-xs text-muted-foreground">Endereco</p>
                   <p className="text-sm font-medium">{paciente.endereco}</p>
                 </div>
               )}
 
               {paciente.observacoes && (
                 <div>
-                  <p className="text-xs text-muted-foreground">Observações</p>
+                  <p className="text-xs text-muted-foreground">Observacoes</p>
                   <p className="text-sm">{paciente.observacoes}</p>
                 </div>
               )}
@@ -146,22 +140,21 @@ export function PacienteDetalhes() {
               <div>
                 <p className="text-xs text-muted-foreground">Status</p>
                 <p className="text-sm font-medium">
-                  {paciente.ativo ? "✓ Ativo" : "✗ Inativo"}
+                  {paciente.ativo ? "Ativo" : "Inativo"}
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Prontuários Recentes */}
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle className="text-lg">Prontuários</CardTitle>
+              <CardTitle className="text-lg">Prontuarios</CardTitle>
               <CardDescription>{prontuarios.length} registrado(s)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 max-h-96 overflow-y-auto">
               {prontuarios.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhum prontuário
+                  Nenhum prontuario
                 </p>
               ) : (
                 prontuarios.map((prontuario) => (
@@ -187,12 +180,11 @@ export function PacienteDetalhes() {
           </Card>
         </aside>
 
-        {/* Prontuários - Konten Utama */}
         <main className="lg:col-span-2 space-y-6">
           <Tabs defaultValue="prontuario" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="prontuario">Prontuário</TabsTrigger>
-              <TabsTrigger value="novo">Novo Prontuário</TabsTrigger>
+              <TabsTrigger value="prontuario">Prontuario</TabsTrigger>
+              <TabsTrigger value="novo">Novo Prontuario</TabsTrigger>
             </TabsList>
 
             <TabsContent value="prontuario" className="space-y-4 mt-4">
@@ -209,7 +201,7 @@ export function PacienteDetalhes() {
                     onSuccess={() => {
                       toast({
                         title: "Sucesso",
-                        description: "Prontuário atualizado com sucesso.",
+                        description: "Prontuario atualizado com sucesso.",
                       });
                     }}
                   />
@@ -221,7 +213,7 @@ export function PacienteDetalhes() {
                 </>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-muted-foreground">Selecione um prontuário para.VIEW</p>
+                  <p className="text-muted-foreground">Selecione um prontuario para continuar.</p>
                 </div>
               )}
             </TabsContent>
@@ -229,13 +221,12 @@ export function PacienteDetalhes() {
             <TabsContent value="novo" className="mt-4">
               <ProntuarioForm
                 pacienteId={paciente.id}
-                profissionalId={paciente.id} // Aqui você pode criar um padrão ou deixar o usuário escolher
+                profissionalId={paciente.id}
                 onSuccess={() => {
                   toast({
                     title: "Sucesso",
-                    description: "Novo prontuário criado com sucesso.",
+                    description: "Novo prontuario criado com sucesso.",
                   });
-                  // Recarregar prontuários
                   prontuariosQuery.refetch();
                 }}
               />

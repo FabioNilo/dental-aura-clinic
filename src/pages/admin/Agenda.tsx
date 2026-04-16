@@ -127,17 +127,16 @@ const Agenda = () => {
   });
   const profissionaisQuery = useProfissionaisOptions();
   const updateStatusMutation = useUpdateAgendamentoStatus();
-  const solicitacaoVinculadaQuery = useSolicitacaoVinculadaQuery(selected?.id ?? null);
-  const pacienteContextQuery = usePacienteOperacaoContext({
-    enabled: Boolean(selected?.paciente_id),
-    pacienteId: selected?.paciente_id ?? null,
-  });
-
   const agendamentos = useMemo(() => agendamentosQuery.data ?? [], [agendamentosQuery.data]);
   const selected = useMemo(
     () => agendamentos.find((item) => item.id === selectedId) ?? agendamentos[0] ?? null,
     [agendamentos, selectedId],
   );
+  const solicitacaoVinculadaQuery = useSolicitacaoVinculadaQuery(selected?.id ?? null);
+  const pacienteContextQuery = usePacienteOperacaoContext({
+    enabled: Boolean(selected?.paciente_id),
+    pacienteId: selected?.paciente_id ?? null,
+  });
 
   useEffect(() => {
     if (targetAgendamentoId && agendamentos.some((item) => item.id === targetAgendamentoId)) {
@@ -155,7 +154,7 @@ const Agenda = () => {
       setNovoStatus(selected.status as AgendamentoStatus);
       setObservacoes(selected.observacoes ?? "");
     }
-  }, [selected]);
+  }, [selected?.id, selected?.observacoes, selected?.status]);
 
   const resumo = {
     cancelados: agendamentos.filter((item) => item.status === "cancelado").length,

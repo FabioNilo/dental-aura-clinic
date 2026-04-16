@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ClinicAuthProvider, RequireAdmin } from "@/features/auth/ClinicAuth";
+import { queryClient } from "@/lib/react-query";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminLayout from "./components/admin/AdminLayout.tsx";
@@ -16,8 +17,6 @@ import Profissionais from "./pages/admin/Profissionais.tsx";
 import Solicitacoes from "./pages/admin/Solicitacoes.tsx";
 import Servicos from "./pages/admin/Servicos.tsx";
 import Financeiro from "./pages/admin/Financeiro.tsx";
-
-const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

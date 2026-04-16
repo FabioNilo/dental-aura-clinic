@@ -29,9 +29,12 @@ import {
   type ProfissionalRecord,
   type ProfissionalStatusFilter,
   useCreateProfissional,
-  useProfissionaisAdminQuery,
+  useProfissionalById,
+  useProfissionaisListQuery,
   useUpdateProfissional,
 } from "@/features/profissionais/api";
+
+const PAGE_SIZE = 20;
 
 type FormState = {
   ativo: boolean;
@@ -70,6 +73,7 @@ function normalizeOptionalValue(value: string) {
 }
 
 const Profissionais = () => {
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ProfissionalStatusFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -78,27 +82,30 @@ const Profissionais = () => {
 
   const deferredSearch = useDeferredValue(search);
 
-  const profissionaisQuery = useProfissionaisAdminQuery({
+  const profissionaisQuery = useProfissionaisListQuery({
+    page,
+    pageSize: PAGE_SIZE,
     search: deferredSearch,
     status,
   });
+  const selectedProfissionalQuery = useProfissionalById(isCreatingNew ? null : selectedId);
   const createProfissional = useCreateProfissional();
   const updateProfissional = useUpdateProfissional();
 
-  const profissionais = useMemo(
-    () => profissionaisQuery.data ?? [],
-    [profissionaisQuery.data],
-  );
-  const selected = useMemo(
-    () => (isCreatingNew ? null : profissionais.find((item) => item.id === selectedId) ?? null),
-    [isCreatingNew, selectedId, profissionais],
-  );
+  const profissionais = useMemo(() => profissionaisQuery.data?.items ?? [], [profissionaisQuery.data]);
+  const totalCount = profissionaisQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const selected = isCreatingNew ? null : selectedProfissionalQuery.data ?? null;
 
   useEffect(() => {
     if (!isCreatingNew && !selectedId && profissionais.length > 0) {
       setSelectedId(profissionais[0].id);
     }
-  }, [isCreatingNew, selectedId, profissionais]);
+  }, [isCreatingNew, profissionais, selectedId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [deferredSearch, status]);
 
   useEffect(() => {
     if (selected) {
@@ -106,10 +113,10 @@ const Profissionais = () => {
       return;
     }
 
-    setForm(emptyFormState());
-  }, [selected]);
-
-  const activeCount = profissionais.filter((item) => item.ativo).length;
+    if (isCreatingNew) {
+      setForm(emptyFormState());
+    }
+  }, [isCreatingNew, selected?.id]);
 
   const handleNew = () => {
     setIsCreatingNew(true);
@@ -127,7 +134,7 @@ const Profissionais = () => {
   const handleSubmit = async () => {
     if (!form.nome.trim()) {
       toast({
-        title: "Nome obrigatório",
+        title: "Nome obrigatorio",
         description: "Informe o nome do profissional antes de salvar.",
         variant: "destructive",
       });
@@ -158,7 +165,7 @@ const Profissionais = () => {
       });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Não foi possível salvar o profissional.";
+        error instanceof Error ? error.message : "Nao foi possivel salvar o profissional.";
 
       toast({
         title: "Falha ao salvar",
@@ -168,7 +175,7 @@ const Profissionais = () => {
     }
   };
 
-  const handleQuickToggle = async (profissional: ProfissionalRecord) => {
+  const handleQuickToggle = async (profissional: (typeof profissionais)[number]) => {
     try {
       await updateProfissional.mutateAsync({
         ativo: !profissional.ativo,
@@ -193,9 +200,7 @@ const Profissionais = () => {
       });
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Não foi possível atualizar o status do profissional.";
+        error instanceof Error ? error.message : "Nao foi possivel atualizar o status do profissional.";
 
       toast({
         title: "Falha ao atualizar",
@@ -211,17 +216,17 @@ const Profissionais = () => {
     <div className="space-y-10">
       <section className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold font-headline text-foreground">Time clínico</h1>
+          <h1 className="text-3xl font-extrabold font-headline text-foreground">Time clinico</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Cadastre os profissionais disponíveis para agendamento e mantenha especialidade, CRO e contatos operacionais centralizados.
+            Cadastre os profissionais disponiveis para agendamento e mantenha especialidade, CRO e contatos operacionais centralizados.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-card">
           <Badge className="border-primary/15 bg-accent text-primary" variant="outline">
-            {activeCount} ativos
+            {totalCount} cadastrados
           </Badge>
           <Badge className="border-border bg-background text-muted-foreground" variant="outline">
-            {profissionais.length} cadastrados
+            Pagina {page} de {totalPages}
           </Badge>
         </div>
       </section>
@@ -285,72 +290,98 @@ const Profissionais = () => {
                 Nenhum profissional encontrado com os filtros atuais.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Profissional</TableHead>
-                    <TableHead>Especialidade</TableHead>
-                    <TableHead>Contato</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Acao</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {profissionais.map((profissional) => (
-                    <TableRow
-                      className={profissional.id === selectedId ? "bg-accent/40" : ""}
-                      key={profissional.id}
-                      onClick={() => {
-                        setIsCreatingNew(false);
-                        setSelectedId(profissional.id);
-                      }}
-                    >
-                      <TableCell>
-                        <div>
-                          <p className="font-semibold text-foreground">{profissional.nome}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {profissional.cro ? `CRO ${profissional.cro}` : "CRO não informado"}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{profissional.especialidade ?? "Não informada"}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1 text-xs text-muted-foreground">
-                          <p>{profissional.telefone ?? "Sem telefone"}</p>
-                          <p className="line-clamp-1">{profissional.email ?? "Sem e-mail"}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            profissional.ativo
-                              ? "border-success/20 bg-success-light text-success"
-                              : "border-border bg-background text-muted-foreground"
-                          }
-                          variant="outline"
-                        >
-                          {profissional.ativo ? "Ativo" : "Inativo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleQuickToggle(profissional);
+              <>
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[760px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Profissional</TableHead>
+                        <TableHead>Especialidade</TableHead>
+                        <TableHead>Contato</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Acao</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {profissionais.map((profissional) => (
+                        <TableRow
+                          className={profissional.id === selectedId ? "bg-accent/40" : ""}
+                          key={profissional.id}
+                          onClick={() => {
+                            setIsCreatingNew(false);
+                            setSelectedId(profissional.id);
                           }}
-                          size="sm"
-                          type="button"
-                          variant="outline"
                         >
-                          {profissional.ativo ? "Inativar" : "Reativar"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-                </Table>
-              </div>
+                          <TableCell>
+                            <div>
+                              <p className="font-semibold text-foreground">{profissional.nome}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {profissional.cro ? `CRO ${profissional.cro}` : "CRO nao informado"}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>{profissional.especialidade ?? "Nao informada"}</TableCell>
+                          <TableCell>
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p>{profissional.telefone ?? "Sem telefone"}</p>
+                              <p className="line-clamp-1">{profissional.email ?? "Sem e-mail"}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                profissional.ativo
+                                  ? "border-success/20 bg-success-light text-success"
+                                  : "border-border bg-background text-muted-foreground"
+                              }
+                              variant="outline"
+                            >
+                              {profissional.ativo ? "Ativo" : "Inativo"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleQuickToggle(profissional);
+                              }}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              {profissional.ativo ? "Inativar" : "Reativar"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Mostrando {profissionais.length} de {totalCount} registros.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      disabled={page === 1}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      type="button"
+                      variant="outline"
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                      type="button"
+                      variant="outline"
+                    >
+                      Proxima
+                    </Button>
+                  </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -361,146 +392,152 @@ const Profissionais = () => {
               {selected ? "Editar profissional" : "Novo profissional"}
             </CardTitle>
             <CardDescription>
-              Defina os dados mínimos necessários para que o time apareça na confirmação das solicitações.
+              Defina os dados minimos necessarios para que o time apareca na confirmacao das solicitacoes.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <BriefcaseMedical className="h-4 w-4 text-primary" />
-                Contexto do cadastro
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Profissionais ativos aparecem como opção no fluxo de confirmação e na agenda operacional da clínica.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="profissional-nome">Nome do profissional</Label>
-              <Input
-                id="profissional-nome"
-                onChange={(event) => handleChange("nome", event.target.value)}
-                placeholder="Ex.: Dra. Juliana Sampaio"
-                value={form.nome}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="profissional-especialidade">Especialidade</Label>
-                <Input
-                  id="profissional-especialidade"
-                  onChange={(event) => handleChange("especialidade", event.target.value)}
-                  placeholder="Ortodontia"
-                  value={form.especialidade}
-                />
+            {!isCreatingNew && selectedId && selectedProfissionalQuery.isLoading && !selected ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Carregando detalhe do profissional...
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="profissional-cro">CRO</Label>
-                <Input
-                  id="profissional-cro"
-                  onChange={(event) => handleChange("cro", event.target.value)}
-                  placeholder="SP 12345"
-                  value={form.cro}
-                />
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <BriefcaseMedical className="h-4 w-4 text-primary" />
+                    Contexto do cadastro
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Profissionais ativos aparecem como opcao no fluxo de confirmacao e na agenda operacional da clinica.
+                  </p>
+                </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="profissional-telefone">Telefone</Label>
-                <Input
-                  id="profissional-telefone"
-                  onChange={(event) => handleChange("telefone", event.target.value)}
-                  placeholder="(11) 99999-9999"
-                  value={form.telefone}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="profissional-email">E-mail</Label>
-                <Input
-                  id="profissional-email"
-                  onChange={(event) => handleChange("email", event.target.value)}
-                  placeholder="juliana@clinica.com"
-                  type="email"
-                  value={form.email}
-                />
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="profissional-nome">Nome do profissional</Label>
+                  <Input
+                    id="profissional-nome"
+                    onChange={(event) => handleChange("nome", event.target.value)}
+                    placeholder="Ex.: Dra. Juliana Sampaio"
+                    value={form.nome}
+                  />
+                </div>
 
-            <Separator />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="profissional-especialidade">Especialidade</Label>
+                    <Input
+                      id="profissional-especialidade"
+                      onChange={(event) => handleChange("especialidade", event.target.value)}
+                      placeholder="Ortodontia"
+                      value={form.especialidade}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="profissional-cro">CRO</Label>
+                    <Input
+                      id="profissional-cro"
+                      onChange={(event) => handleChange("cro", event.target.value)}
+                      placeholder="SP 12345"
+                      value={form.cro}
+                    />
+                  </div>
+                </div>
 
-            <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 p-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Disponivel para agendamento</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Profissionais inativos deixam de aparecer na confirmação das solicitações.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">{form.ativo ? "Ativo" : "Inativo"}</span>
-                <Switch
-                  checked={form.ativo}
-                  onCheckedChange={(checked) => handleChange("ativo", checked)}
-                />
-              </div>
-            </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="profissional-telefone">Telefone</Label>
+                    <Input
+                      id="profissional-telefone"
+                      onChange={(event) => handleChange("telefone", event.target.value)}
+                      placeholder="(11) 99999-9999"
+                      value={form.telefone}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="profissional-email">E-mail</Label>
+                    <Input
+                      id="profissional-email"
+                      onChange={(event) => handleChange("email", event.target.value)}
+                      placeholder="juliana@clinica.com"
+                      type="email"
+                      value={form.email}
+                    />
+                  </div>
+                </div>
 
-            {selected ? (
-              <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Registro selecionado
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Separator />
+
+                <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 p-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">Criado em</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {new Intl.DateTimeFormat("pt-BR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      }).format(new Date(selected.created_at))}
+                    <p className="text-sm font-semibold text-foreground">Disponivel para agendamento</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Profissionais inativos deixam de aparecer na confirmacao das solicitacoes.
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Atualizado em</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {new Intl.DateTimeFormat("pt-BR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      }).format(new Date(selected.updated_at))}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">{form.ativo ? "Ativo" : "Inativo"}</span>
+                    <Switch checked={form.ativo} onCheckedChange={(checked) => handleChange("ativo", checked)} />
+                  </div>
+                </div>
+
+                {selected ? (
+                  <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Registro selecionado
+                    </p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Criado em</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          }).format(new Date(selected.created_at))}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Atualizado em</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          }).format(new Date(selected.updated_at))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button className="flex-1" disabled={isSaving} onClick={() => void handleSubmit()} type="button">
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {selected ? "Salvar profissional" : "Criar profissional"}
+                  </Button>
+                  <Button onClick={handleNew} type="button" variant="outline">
+                    Limpar formulario
+                  </Button>
+                </div>
+
+                <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <BadgeCheck className="h-4 w-4 text-primary" />
+                    Uso no fluxo
+                  </p>
+                  <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+                    <p className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-primary/80" />
+                      Mantenha o telefone atualizado para contato interno rapido.
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-primary/80" />
+                      O e-mail ajuda na organizacao do time e nas futuras automacoes.
                     </p>
                   </div>
                 </div>
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button className="flex-1" disabled={isSaving} onClick={() => void handleSubmit()} type="button">
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {selected ? "Salvar profissional" : "Criar profissional"}
-              </Button>
-              <Button onClick={handleNew} type="button" variant="outline">
-                Limpar formulario
-              </Button>
-            </div>
-
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <BadgeCheck className="h-4 w-4 text-primary" />
-                Uso no fluxo
-              </p>
-              <div className="mt-2 space-y-2 text-sm text-muted-foreground">
-                <p className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-primary/80" />
-                  Mantenha o telefone atualizado para contato interno rápido.
-                </p>
-                <p className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-primary/80" />
-                  O e-mail ajuda na organização do time e nas futuras automações.
-                </p>
-              </div>
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

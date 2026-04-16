@@ -33,10 +33,13 @@ import {
   type PacienteRecord,
   type PacienteStatusFilter,
   useCreatePaciente,
-  usePacientesAdminQuery,
+  usePacienteById,
+  usePacientesListQuery,
   useUpdatePaciente,
 } from "@/features/pacientes/api";
 import { ProntuarioModal } from "@/components/admin/prontuario";
+
+const PAGE_SIZE = 20;
 
 type FormState = {
   ativo: boolean;
@@ -82,6 +85,7 @@ function normalizeOptionalValue(value: string) {
 
 const Pacientes = () => {
   const navigate = useNavigate();
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<PacienteStatusFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -92,18 +96,20 @@ const Pacientes = () => {
 
   const deferredSearch = useDeferredValue(search);
 
-  const pacientesQuery = usePacientesAdminQuery({
+  const pacientesQuery = usePacientesListQuery({
+    page,
+    pageSize: PAGE_SIZE,
     search: deferredSearch,
     status,
   });
+  const selectedPacienteQuery = usePacienteById(isCreatingNew ? null : selectedId);
   const createPaciente = useCreatePaciente();
   const updatePaciente = useUpdatePaciente();
 
-  const pacientes = useMemo(() => pacientesQuery.data ?? [], [pacientesQuery.data]);
-  const selected = useMemo(
-    () => (isCreatingNew ? null : pacientes.find((item) => item.id === selectedId) ?? null),
-    [isCreatingNew, pacientes, selectedId],
-  );
+  const pacientes = useMemo(() => pacientesQuery.data?.items ?? [], [pacientesQuery.data]);
+  const totalCount = pacientesQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const selected = isCreatingNew ? null : selectedPacienteQuery.data ?? null;
 
   useEffect(() => {
     if (!isCreatingNew && !selectedId && pacientes.length > 0) {
@@ -112,15 +118,19 @@ const Pacientes = () => {
   }, [isCreatingNew, pacientes, selectedId]);
 
   useEffect(() => {
+    setPage(1);
+  }, [deferredSearch, status]);
+
+  useEffect(() => {
     if (selected) {
       setForm(mapPacienteToForm(selected));
       return;
     }
 
-    setForm(emptyFormState());
-  }, [selected]);
-
-  const activeCount = pacientes.filter((item) => item.ativo).length;
+    if (isCreatingNew) {
+      setForm(emptyFormState());
+    }
+  }, [isCreatingNew, selected?.id]);
 
   const handleNew = () => {
     setIsCreatingNew(true);
@@ -181,7 +191,7 @@ const Pacientes = () => {
     }
   };
 
-  const handleQuickToggle = async (paciente: PacienteRecord) => {
+  const handleQuickToggle = async (paciente: (typeof pacientes)[number]) => {
     try {
       await updatePaciente.mutateAsync({
         ativo: !paciente.ativo,
@@ -231,10 +241,10 @@ const Pacientes = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-card">
           <Badge className="border-primary/15 bg-accent text-primary" variant="outline">
-            {activeCount} ativos
+            {totalCount} cadastrados
           </Badge>
           <Badge className="border-border bg-background text-muted-foreground" variant="outline">
-            {pacientes.length} cadastrados
+            Pagina {page} de {totalPages}
           </Badge>
         </div>
       </section>
@@ -298,89 +308,117 @@ const Pacientes = () => {
                 Nenhum paciente encontrado com os filtros atuais.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[860px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Paciente</TableHead>
-                      <TableHead>Contato</TableHead>
-                      <TableHead>CPF</TableHead>
-                      <TableHead>Nascimento</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Acao</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pacientes.map((paciente) => (
-                      <TableRow
-                        className={paciente.id === selectedId ? "bg-accent/40" : ""}
-                        key={paciente.id}
-                        onClick={() => {
-                          setIsCreatingNew(false);
-                          setSelectedId(paciente.id);
-                        }}
-                      >
-                        <TableCell>
-                          <div>
-                            <p className="font-semibold text-foreground">{paciente.nome}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              {paciente.endereco ?? "Endereco nao informado"}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1 text-xs text-muted-foreground">
-                            <p>{paciente.telefone ?? "Sem telefone"}</p>
-                            <p className="line-clamp-1">{paciente.email ?? "Sem e-mail"}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>{paciente.cpf ?? "Nao informado"}</TableCell>
-                        <TableCell>{paciente.data_nascimento ?? "Nao informada"}</TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              paciente.ativo
-                                ? "border-success/20 bg-success-light text-success"
-                                : "border-border bg-background text-muted-foreground"
-                            }
-                            variant="outline"
-                          >
-                            {paciente.ativo ? "Ativo" : "Inativo"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setPacienteSelecionadoParaProntuario(paciente);
-                                setProntuarioModalOpen(true);
-                              }}
-                              size="sm"
-                              type="button"
-                              variant="outline"
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              Prontuário
-                            </Button>
-                            <Button
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleQuickToggle(paciente);
-                              }}
-                              size="sm"
-                              type="button"
-                              variant="outline"
-                            >
-                              {paciente.ativo ? "Inativar" : "Reativar"}
-                            </Button>
-                          </div>
-                        </TableCell>
+              <>
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[860px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Paciente</TableHead>
+                        <TableHead>Contato</TableHead>
+                        <TableHead>CPF</TableHead>
+                        <TableHead>Nascimento</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Acao</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {pacientes.map((paciente) => (
+                        <TableRow
+                          className={paciente.id === selectedId ? "bg-accent/40" : ""}
+                          key={paciente.id}
+                          onClick={() => {
+                            setIsCreatingNew(false);
+                            setSelectedId(paciente.id);
+                          }}
+                        >
+                          <TableCell>
+                            <div>
+                              <p className="font-semibold text-foreground">{paciente.nome}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-1">
+                                {paciente.endereco ?? "Endereco nao informado"}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p>{paciente.telefone ?? "Sem telefone"}</p>
+                              <p className="line-clamp-1">{paciente.email ?? "Sem e-mail"}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>{paciente.cpf ?? "Nao informado"}</TableCell>
+                          <TableCell>{paciente.data_nascimento ?? "Nao informada"}</TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                paciente.ativo
+                                  ? "border-success/20 bg-success-light text-success"
+                                  : "border-border bg-background text-muted-foreground"
+                              }
+                              variant="outline"
+                            >
+                              {paciente.ativo ? "Ativo" : "Inativo"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (selected?.id === paciente.id) {
+                                    setPacienteSelecionadoParaProntuario(selected);
+                                    setProntuarioModalOpen(true);
+                                  }
+                                }}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                Prontuario
+                              </Button>
+                              <Button
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleQuickToggle(paciente);
+                                }}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                {paciente.ativo ? "Inativar" : "Reativar"}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Mostrando {pacientes.length} de {totalCount} registros.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      disabled={page === 1}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      type="button"
+                      variant="outline"
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                      type="button"
+                      variant="outline"
+                    >
+                      Proxima
+                    </Button>
+                  </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -396,167 +434,175 @@ const Pacientes = () => {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <UserRound className="h-4 w-4 text-primary" />
-                Contexto do cadastro
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Esses dados ajudam a equipe a reconhecer historico, contato e preferencias antes de confirmar a consulta.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="paciente-nome">Nome do paciente</Label>
-              <Input
-                id="paciente-nome"
-                onChange={(event) => handleChange("nome", event.target.value)}
-                placeholder="Ex.: Maria Souza"
-                value={form.nome}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="paciente-telefone">Telefone</Label>
-                <Input
-                  id="paciente-telefone"
-                  onChange={(event) => handleChange("telefone", event.target.value)}
-                  placeholder="(11) 99999-9999"
-                  value={form.telefone}
-                />
+            {!isCreatingNew && selectedId && selectedPacienteQuery.isLoading && !selected ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Carregando detalhe do paciente...
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="paciente-email">E-mail</Label>
-                <Input
-                  id="paciente-email"
-                  onChange={(event) => handleChange("email", event.target.value)}
-                  placeholder="maria@clinica.com"
-                  type="email"
-                  value={form.email}
-                />
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <UserRound className="h-4 w-4 text-primary" />
+                    Contexto do cadastro
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Esses dados ajudam a equipe a reconhecer historico, contato e preferencias antes de confirmar a consulta.
+                  </p>
+                </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="paciente-cpf">CPF</Label>
-                <Input
-                  id="paciente-cpf"
-                  onChange={(event) => handleChange("cpf", event.target.value)}
-                  placeholder="000.000.000-00"
-                  value={form.cpf}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="paciente-nascimento">Data de nascimento</Label>
-                <Input
-                  id="paciente-nascimento"
-                  onChange={(event) => handleChange("data_nascimento", event.target.value)}
-                  type="date"
-                  value={form.data_nascimento}
-                />
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="paciente-nome">Nome do paciente</Label>
+                  <Input
+                    id="paciente-nome"
+                    onChange={(event) => handleChange("nome", event.target.value)}
+                    placeholder="Ex.: Maria Souza"
+                    value={form.nome}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="paciente-endereco">Endereco</Label>
-              <Input
-                id="paciente-endereco"
-                onChange={(event) => handleChange("endereco", event.target.value)}
-                placeholder="Rua, numero, bairro e cidade"
-                value={form.endereco}
-              />
-            </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="paciente-telefone">Telefone</Label>
+                    <Input
+                      id="paciente-telefone"
+                      onChange={(event) => handleChange("telefone", event.target.value)}
+                      placeholder="(11) 99999-9999"
+                      value={form.telefone}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paciente-email">E-mail</Label>
+                    <Input
+                      id="paciente-email"
+                      onChange={(event) => handleChange("email", event.target.value)}
+                      placeholder="maria@clinica.com"
+                      type="email"
+                      value={form.email}
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="paciente-observacoes">Observacoes</Label>
-              <Textarea
-                id="paciente-observacoes"
-                onChange={(event) => handleChange("observacoes", event.target.value)}
-                placeholder="Registre preferencias, contexto ou historico operacional relevante"
-                value={form.observacoes}
-              />
-            </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="paciente-cpf">CPF</Label>
+                    <Input
+                      id="paciente-cpf"
+                      onChange={(event) => handleChange("cpf", event.target.value)}
+                      placeholder="000.000.000-00"
+                      value={form.cpf}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paciente-nascimento">Data de nascimento</Label>
+                    <Input
+                      id="paciente-nascimento"
+                      onChange={(event) => handleChange("data_nascimento", event.target.value)}
+                      type="date"
+                      value={form.data_nascimento}
+                    />
+                  </div>
+                </div>
 
-            <Separator />
+                <div className="space-y-2">
+                  <Label htmlFor="paciente-endereco">Endereco</Label>
+                  <Input
+                    id="paciente-endereco"
+                    onChange={(event) => handleChange("endereco", event.target.value)}
+                    placeholder="Rua, numero, bairro e cidade"
+                    value={form.endereco}
+                  />
+                </div>
 
-            <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 p-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Cadastro ativo</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Pacientes inativos saem do uso operacional, mas preservam o historico.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">{form.ativo ? "Ativo" : "Inativo"}</span>
-                <Switch checked={form.ativo} onCheckedChange={(checked) => handleChange("ativo", checked)} />
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="paciente-observacoes">Observacoes</Label>
+                  <Textarea
+                    id="paciente-observacoes"
+                    onChange={(event) => handleChange("observacoes", event.target.value)}
+                    placeholder="Registre preferencias, contexto ou historico operacional relevante"
+                    value={form.observacoes}
+                  />
+                </div>
 
-            {selected ? (
-              <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Registro selecionado
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Separator />
+
+                <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 p-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">Criado em</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {new Intl.DateTimeFormat("pt-BR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      }).format(new Date(selected.created_at))}
+                    <p className="text-sm font-semibold text-foreground">Cadastro ativo</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Pacientes inativos saem do uso operacional, mas preservam o historico.
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Atualizado em</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {new Intl.DateTimeFormat("pt-BR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      }).format(new Date(selected.updated_at))}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">{form.ativo ? "Ativo" : "Inativo"}</span>
+                    <Switch checked={form.ativo} onCheckedChange={(checked) => handleChange("ativo", checked)} />
+                  </div>
+                </div>
+
+                {selected ? (
+                  <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Registro selecionado
+                    </p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Criado em</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          }).format(new Date(selected.created_at))}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Atualizado em</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          }).format(new Date(selected.updated_at))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button className="flex-1" disabled={isSaving} onClick={() => void handleSubmit()} type="button">
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {selected ? "Salvar paciente" : "Criar paciente"}
+                  </Button>
+                  <Button onClick={handleNew} type="button" variant="outline">
+                    Limpar formulario
+                  </Button>
+                </div>
+
+                <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <p className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-primary/80" />
+                      O telefone ajuda a vincular solicitacoes captadas por IA.
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-primary/80" />
+                      A data de nascimento melhora a identificacao em recepcao e retornos.
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary/80" />
+                      O endereco pode ser util para visitas e orientacoes de acesso.
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Contact className="h-4 w-4 text-primary/80" />
+                      Observacoes operacionais evitam perda de contexto entre recepcao e atendimento.
                     </p>
                   </div>
                 </div>
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button className="flex-1" disabled={isSaving} onClick={() => void handleSubmit()} type="button">
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {selected ? "Salvar paciente" : "Criar paciente"}
-              </Button>
-              <Button onClick={handleNew} type="button" variant="outline">
-                Limpar formulario
-              </Button>
-            </div>
-
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-primary/80" />
-                  O telefone ajuda a vincular solicitacoes captadas por IA.
-                </p>
-                <p className="flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-primary/80" />
-                  A data de nascimento melhora a identificacao em recepcao e retornos.
-                </p>
-                <p className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary/80" />
-                  O endereco pode ser util para visitas e orientacoes de acesso.
-                </p>
-                <p className="flex items-center gap-2">
-                  <Contact className="h-4 w-4 text-primary/80" />
-                  Observacoes operacionais evitam perda de contexto entre recepcao e atendimento.
-                </p>
-              </div>
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Prontuário Modal */}
       {pacienteSelecionadoParaProntuario && (
         <ProntuarioModal
           pacienteId={pacienteSelecionadoParaProntuario.id}
@@ -566,7 +612,7 @@ const Pacientes = () => {
             setProntuarioModalOpen(false);
             setPacienteSelecionadoParaProntuario(null);
           }}
-          onViewCompleto={(prontuarioId) => {
+          onViewCompleto={() => {
             navigate(`/admin/pacientes/${pacienteSelecionadoParaProntuario.id}`);
           }}
           onCreateNew={() => {

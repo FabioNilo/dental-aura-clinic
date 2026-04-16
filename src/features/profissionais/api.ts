@@ -1,11 +1,19 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { queryPresets } from "@/lib/react-query";
+import type { PaginatedResult } from "@/types/api";
 
 export type ProfissionalRecord = Tables<"profissionais">;
 export type ProfissionalStatusFilter = "all" | "active" | "inactive";
+export type ProfissionalListItem = Pick<
+  Tables<"profissionais">,
+  "ativo" | "cro" | "email" | "especialidade" | "id" | "nome" | "telefone"
+>;
 
-export type ProfissionaisFilters = {
+export type ProfissionaisListFilters = {
+  page: number;
+  pageSize: number;
   search: string;
   status: ProfissionalStatusFilter;
 };
@@ -22,21 +30,28 @@ export type SaveProfissionalInput = {
 
 function invalidateProfissionalData(queryClient: ReturnType<typeof useQueryClient>) {
   return Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["profissionais-admin"] }),
+    queryClient.invalidateQueries({ queryKey: ["profissionais-list"] }),
+    queryClient.invalidateQueries({ queryKey: ["profissional"] }),
     queryClient.invalidateQueries({ queryKey: ["profissionais-options"] }),
     queryClient.invalidateQueries({ queryKey: ["overview"] }),
   ]);
 }
 
-export function useProfissionaisAdminQuery(filters: ProfissionaisFilters) {
+export function useProfissionaisListQuery(filters: ProfissionaisListFilters) {
   return useQuery({
-    queryKey: ["profissionais-admin", filters],
+    ...queryPresets.search,
+    placeholderData: keepPreviousData,
+    queryKey: ["profissionais-list", filters],
     queryFn: async () => {
+      const from = (filters.page - 1) * filters.pageSize;
+      const to = from + filters.pageSize - 1;
+
       let query = supabase
         .from("profissionais")
-        .select("id, nome, especialidade, cro, email, telefone, ativo, created_at, updated_at")
+        .select("id, nome, especialidade, cro, email, telefone, ativo", { count: "exact" })
         .order("ativo", { ascending: false })
-        .order("nome", { ascending: true });
+        .order("nome", { ascending: true })
+        .range(from, to);
 
       if (filters.status === "active") {
         query = query.eq("ativo", true);
@@ -54,13 +69,39 @@ export function useProfissionaisAdminQuery(filters: ProfissionaisFilters) {
         );
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) {
         throw error;
       }
 
-      return (data ?? []) as ProfissionalRecord[];
+      return {
+        count: count ?? 0,
+        items: (data ?? []) as ProfissionalListItem[],
+        page: filters.page,
+        pageSize: filters.pageSize,
+      } satisfies PaginatedResult<ProfissionalListItem>;
+    },
+  });
+}
+
+export function useProfissionalById(profissionalId: string | null | undefined) {
+  return useQuery({
+    ...queryPresets.detail,
+    enabled: Boolean(profissionalId),
+    queryKey: ["profissional", profissionalId ?? null],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profissionais")
+        .select("id, nome, especialidade, cro, email, telefone, ativo, created_at, updated_at")
+        .eq("id", profissionalId!)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? null) as ProfissionalRecord | null;
     },
   });
 }
