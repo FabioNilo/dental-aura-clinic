@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
 import {
   ArrowUpRight,
   CalendarClock,
@@ -27,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { usePacienteOperacaoContext } from "@/features/pacientes/api";
+import { formatClinicDateTime, formatClinicTimeRange, getClinicNowDateValue } from "@/lib/datetime";
 import {
   AGENDAMENTO_STATUS_OPTIONS,
   type AgendamentoStatus,
@@ -92,27 +92,10 @@ const solicitacaoStatusMeta: Record<string, { badgeClassName: string; label: str
   },
 };
 
-function formatDateTime(date: string | null) {
-  if (!date) {
-    return "Nao informado";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(date));
-}
-
-function formatRange(date: string, duration: number | null) {
-  const start = new Date(date);
-  const end = new Date(start.getTime() + (duration ?? 30) * 60000);
-  return `${format(start, "HH:mm")} - ${format(end, "HH:mm")}`;
-}
-
 const Agenda = () => {
   const [searchParams] = useSearchParams();
   const targetAgendamentoId = searchParams.get("agendamentoId");
-  const initialDate = searchParams.get("date") ?? format(new Date(), "yyyy-MM-dd");
+  const initialDate = searchParams.get("date") ?? getClinicNowDateValue();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [date, setDate] = useState(initialDate);
   const [status, setStatus] = useState<AgendamentoStatus | "all">("all");
@@ -302,7 +285,9 @@ const Agenda = () => {
                         key={agendamento.id}
                         onClick={() => setSelectedId(agendamento.id)}
                       >
-                        <TableCell className="font-semibold">{formatRange(agendamento.data_hora, agendamento.duracao_minutos)}</TableCell>
+                        <TableCell className="font-semibold">
+                          {formatClinicTimeRange(agendamento.data_hora, agendamento.duracao_minutos)}
+                        </TableCell>
                         <TableCell>{agendamento.paciente_nome}</TableCell>
                         <TableCell>{agendamento.profissional_nome}</TableCell>
                         <TableCell>{agendamento.servico_nome}</TableCell>
@@ -338,7 +323,7 @@ const Agenda = () => {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      {formatDateTime(selected.data_hora)}
+                      {formatClinicDateTime(selected.data_hora)}
                     </p>
                     <h2 className="mt-2 text-2xl font-bold font-headline">{selected.paciente_nome}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -361,10 +346,14 @@ const Agenda = () => {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <InfoBlock icon={Clock3} label="Faixa horaria" value={formatRange(selected.data_hora, selected.duracao_minutos)} />
+                  <InfoBlock
+                    icon={Clock3}
+                    label="Faixa horaria"
+                    value={formatClinicTimeRange(selected.data_hora, selected.duracao_minutos)}
+                  />
                   <InfoBlock icon={CalendarClock} label="Origem" value={selected.origem} />
-                  <InfoBlock label="Criado em" value={formatDateTime(selected.created_at)} />
-                  <InfoBlock label="Atualizado em" value={formatDateTime(selected.updated_at)} />
+                  <InfoBlock label="Criado em" value={formatClinicDateTime(selected.created_at)} />
+                  <InfoBlock label="Atualizado em" value={formatClinicDateTime(selected.updated_at)} />
                 </div>
 
                 <div className="space-y-4 rounded-2xl border border-border/60 bg-card/70 p-5">
@@ -410,7 +399,7 @@ const Agenda = () => {
                         />
                         <InfoBlock
                           label="Confirmado em"
-                          value={formatDateTime(solicitacaoVinculadaQuery.data.data_hora_confirmada)}
+                          value={formatClinicDateTime(solicitacaoVinculadaQuery.data.data_hora_confirmada)}
                         />
                       </div>
 
@@ -461,7 +450,7 @@ const Agenda = () => {
                                     </Badge>
                                   </div>
                                   <p className="mt-1 text-xs text-muted-foreground">
-                                    {formatDateTime(item.data_hora)} · {item.profissional_nome}
+                                    {formatClinicDateTime(item.data_hora)} · {item.profissional_nome}
                                   </p>
                                 </div>
                               ))}
@@ -492,7 +481,7 @@ const Agenda = () => {
                                   </Badge>
                                 </div>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                  {item.procedimento_nome} · {formatDateTime(item.created_at)}
+                                  {item.procedimento_nome} · {formatClinicDateTime(item.created_at)}
                                 </p>
                               </div>
                             ))}

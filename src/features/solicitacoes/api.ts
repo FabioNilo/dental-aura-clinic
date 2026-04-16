@@ -1,7 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { getErrorMessage } from "@/lib/errors";
+import { queryPresets } from "@/lib/react-query";
 
 export const SOLICITACAO_STATUS_OPTIONS = [
   "novo",
@@ -82,7 +83,22 @@ export type CreateSolicitacaoInput = {
   turnoDesejado?: "comercial" | "manha" | "noite" | "tarde" | null;
 };
 
-const SOLICITACOES_SELECT = `
+type SolicitacaoRawRecord = Record<string, unknown>;
+
+const SOLICITACOES_LIST_SELECT = `
+  id,
+  created_at,
+  status,
+  canal_origem,
+  codigo_externo,
+  nome_cliente,
+  telefone_cliente,
+  procedimento_nome,
+  dia_desejado,
+  turno_desejado
+`;
+
+const SOLICITACAO_DETAIL_SELECT_PREFERRED = `
   id,
   created_at,
   updated_at,
@@ -107,6 +123,28 @@ const SOLICITACOES_SELECT = `
   resumo_atendimento
 `;
 
+const SOLICITACAO_DETAIL_SELECT_FALLBACK = `
+  id,
+  created_at,
+  updated_at,
+  status,
+  origem,
+  canal_origem,
+  codigo_externo,
+  paciente_id,
+  agendamento_id,
+  profissional_id,
+  servico_id,
+  nome_cliente,
+  telefone_cliente,
+  procedimento_nome,
+  dia_desejado,
+  turno_desejado,
+  data_hora_confirmada,
+  observacoes_cliente,
+  observacoes_admin
+`;
+
 function buildSearchExpression(search: string) {
   const safeSearch = search.trim().replace(/,/g, " ").replace(/\s+/g, " ");
 
@@ -124,6 +162,7 @@ function buildSearchExpression(search: string) {
 
 async function invalidateClinicData(queryClient: ReturnType<typeof useQueryClient>) {
   await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["solicitacao"] }),
     queryClient.invalidateQueries({ queryKey: ["paciente-operacao-context"] }),
     queryClient.invalidateQueries({ queryKey: ["solicitacao-vinculada"] }),
     queryClient.invalidateQueries({ queryKey: ["solicitacoes"] }),
@@ -150,12 +189,71 @@ function isRpcSignatureMismatch(error: unknown) {
   );
 }
 
+function isSchemaMismatchError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String(error.code ?? "") : "";
+  const message = "message" in error ? String(error.message ?? "") : "";
+
+  return (
+    code === "PGRST100" ||
+    code === "PGRST116" ||
+    code === "PGRST204" ||
+    message.includes("Could not find") ||
+    message.includes("column") ||
+    message.includes("schema cache")
+  );
+}
+
 function toQueryError(error: unknown, fallback: string) {
   return new Error(getErrorMessage(error, fallback));
 }
 
+function normalizeSolicitacaoRecord(record: SolicitacaoRawRecord) {
+  return {
+    agendamento_id: typeof record.agendamento_id === "string" ? record.agendamento_id : null,
+    canal_origem: typeof record.canal_origem === "string" ? record.canal_origem : "manual",
+    codigo_externo: typeof record.codigo_externo === "string" ? record.codigo_externo : "Sem codigo",
+    created_at: typeof record.created_at === "string" ? record.created_at : new Date(0).toISOString(),
+    data_hora_confirmada:
+      typeof record.data_hora_confirmada === "string" ? record.data_hora_confirmada : null,
+    dia_desejado: typeof record.dia_desejado === "string" ? record.dia_desejado : null,
+    id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+    nome_cliente: typeof record.nome_cliente === "string" ? record.nome_cliente : "Paciente",
+    observacoes_admin: typeof record.observacoes_admin === "string" ? record.observacoes_admin : null,
+    observacoes_cliente:
+      typeof record.observacoes_cliente === "string" ? record.observacoes_cliente : null,
+    origem: typeof record.origem === "string" ? record.origem : "manual",
+    paciente_id: typeof record.paciente_id === "string" ? record.paciente_id : null,
+    payload_externo: record.payload_externo ?? null,
+    procedimento_nome:
+      typeof record.procedimento_nome === "string" ? record.procedimento_nome : "Procedimento",
+    profissional_id: typeof record.profissional_id === "string" ? record.profissional_id : null,
+    resumo_atendimento: record.resumo_atendimento ?? null,
+    servico_id: typeof record.servico_id === "string" ? record.servico_id : null,
+    status: typeof record.status === "string" ? record.status : "novo",
+    telefone_cliente:
+      typeof record.telefone_cliente === "string" ? record.telefone_cliente : "Nao informado",
+    tipo_atendimento:
+      record.tipo_atendimento === "convenio" || record.tipo_atendimento === "particular"
+        ? record.tipo_atendimento
+        : null,
+    turno_desejado:
+      record.turno_desejado === "comercial" ||
+      record.turno_desejado === "manha" ||
+      record.turno_desejado === "noite" ||
+      record.turno_desejado === "tarde"
+        ? record.turno_desejado
+        : null,
+    updated_at: typeof record.updated_at === "string" ? record.updated_at : new Date(0).toISOString(),
+  } satisfies SolicitacaoRecord;
+}
+
 export function useSolicitacoesQuery(filters: SolicitacaoFilters) {
   return useQuery({
+    ...queryPresets.search,
     queryKey: ["solicitacoes", filters],
     queryFn: async () => {
       const from = (filters.page - 1) * filters.pageSize;
@@ -163,7 +261,7 @@ export function useSolicitacoesQuery(filters: SolicitacaoFilters) {
 
       let query = supabase
         .from("solicitacoes_agendamento")
-        .select(SOLICITACOES_SELECT, { count: "exact" })
+        .select(SOLICITACOES_LIST_SELECT, { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -179,23 +277,58 @@ export function useSolicitacoesQuery(filters: SolicitacaoFilters) {
 
       const { data, error, count } = await query;
 
+      if (error && isSchemaMismatchError(error)) {
+        let fallbackQuery = supabase
+          .from("solicitacoes_agendamento")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(from, to);
+
+        if (filters.status !== "all") {
+          fallbackQuery = fallbackQuery.eq("status", filters.status);
+        }
+
+        let fallbackResult = await fallbackQuery;
+
+        if (fallbackResult.error && isSchemaMismatchError(fallbackResult.error)) {
+          fallbackResult = await supabase
+            .from("solicitacoes_agendamento")
+            .select("*", { count: "exact" })
+            .range(from, to);
+        }
+
+        if (fallbackResult.error) {
+          throw toQueryError(fallbackResult.error, "Nao foi possivel carregar as solicitacoes.");
+        }
+
+        return {
+          count: fallbackResult.count ?? 0,
+          items: (fallbackResult.data ?? []).map((item) =>
+            normalizeSolicitacaoRecord(item as SolicitacaoRawRecord),
+          ),
+          page: filters.page,
+          pageSize: filters.pageSize,
+        };
+      }
+
       if (error) {
         throw toQueryError(error, "Nao foi possivel carregar as solicitacoes.");
       }
 
       return {
         count: count ?? 0,
-        items: (data ?? []) as SolicitacaoRecord[],
+        items: (data ?? []).map((item) => normalizeSolicitacaoRecord(item as SolicitacaoRawRecord)),
         page: filters.page,
         pageSize: filters.pageSize,
       };
     },
-    placeholderData: (previousData) => previousData,
+    placeholderData: keepPreviousData,
   });
 }
 
 export function useProfissionaisOptions() {
   return useQuery({
+    ...queryPresets.static,
     queryKey: ["profissionais-options"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -215,6 +348,7 @@ export function useProfissionaisOptions() {
 
 export function useServicosOptions() {
   return useQuery({
+    ...queryPresets.static,
     queryKey: ["servicos-options"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -232,8 +366,44 @@ export function useServicosOptions() {
   });
 }
 
+export function useSolicitacaoById(solicitacaoId?: string | null) {
+  return useQuery({
+    ...queryPresets.detail,
+    enabled: Boolean(solicitacaoId),
+    queryKey: ["solicitacao", solicitacaoId ?? null],
+    queryFn: async () => {
+      const preferredResult = await supabase
+        .from("solicitacoes_agendamento")
+        .select(SOLICITACAO_DETAIL_SELECT_PREFERRED)
+        .eq("id", solicitacaoId!)
+        .maybeSingle();
+
+      if (!preferredResult.error) {
+        return (preferredResult.data ?? null) as SolicitacaoRecord | null;
+      }
+
+      if (!isSchemaMismatchError(preferredResult.error)) {
+        throw toQueryError(preferredResult.error, "Nao foi possivel carregar a solicitacao.");
+      }
+
+      const fallbackResult = await supabase
+        .from("solicitacoes_agendamento")
+        .select(SOLICITACAO_DETAIL_SELECT_FALLBACK)
+        .eq("id", solicitacaoId!)
+        .maybeSingle();
+
+      if (fallbackResult.error) {
+        throw toQueryError(fallbackResult.error, "Nao foi possivel carregar a solicitacao.");
+      }
+
+      return (fallbackResult.data ?? null) as SolicitacaoRecord | null;
+    },
+  });
+}
+
 export function useSolicitacaoVinculadaQuery(agendamentoId?: string | null) {
   return useQuery({
+    ...queryPresets.detail,
     enabled: Boolean(agendamentoId),
     queryKey: ["solicitacao-vinculada", agendamentoId ?? null],
     queryFn: async () => {
@@ -318,7 +488,7 @@ export function useCreateSolicitacao() {
       const { data, error } = await supabase
         .from("solicitacoes_agendamento")
         .insert(payload)
-        .select(SOLICITACOES_SELECT)
+        .select("id, nome_cliente")
         .single();
 
       if (error) {

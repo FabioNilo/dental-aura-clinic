@@ -16,7 +16,7 @@ vi.mock("@/features/agendamentos/api", () => ({
     data: [
       {
         created_at: "2026-04-03T12:00:00.000Z",
-        data_hora: "2026-04-05T14:30:00.000Z",
+        data_hora: "2026-04-05T17:30:00.000Z",
         duracao_minutos: 60,
         id: "ag-1",
         observacoes: "Paciente confirmou presenca.",
@@ -50,7 +50,7 @@ vi.mock("@/features/solicitacoes/api", () => ({
       canal_origem: "painel_admin",
       codigo_externo: "SOL-20260403-000001",
       created_at: "2026-04-03T10:00:00.000Z",
-      data_hora_confirmada: "2026-04-05T14:30:00.000Z",
+      data_hora_confirmada: "2026-04-05T17:30:00.000Z",
       dia_desejado: "2026-04-05",
       id: "sol-1",
       observacoes_admin: "Paciente confirmado.",

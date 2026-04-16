@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { endOfDay, startOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
+import { getClinicDayBounds } from "@/lib/datetime";
+import { queryPresets } from "@/lib/react-query";
 
 export const AGENDAMENTO_STATUS_OPTIONS = [
   "confirmado",
@@ -67,17 +68,18 @@ async function invalidateAgendaData(queryClient: ReturnType<typeof useQueryClien
 
 export function useAgendamentosAdminQuery(filters: AgendamentosFilters) {
   return useQuery({
+    ...queryPresets.operational,
     queryKey: ["agendamentos-admin", filters],
     queryFn: async () => {
-      const date = filters.date ? new Date(`${filters.date}T12:00:00`) : new Date();
+      const dayBounds = getClinicDayBounds(filters.date);
 
       let query = supabase
         .from("agendamentos")
         .select(
           "id, paciente_id, profissional_id, servico_id, data_hora, duracao_minutos, status, origem, observacoes, created_at, updated_at",
         )
-        .gte("data_hora", startOfDay(date).toISOString())
-        .lte("data_hora", endOfDay(date).toISOString())
+        .gte("data_hora", dayBounds.startIso)
+        .lt("data_hora", dayBounds.endExclusiveIso)
         .order("data_hora", { ascending: true });
 
       if (filters.profissionalId) {

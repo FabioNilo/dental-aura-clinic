@@ -40,6 +40,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { usePacienteOperacaoContext } from "@/features/pacientes/api";
+import {
+  formatClinicCalendarDate,
+  formatClinicDateTime,
+  fromClinicDateTimeLocalValue,
+  getClinicNextHourDateTimeLocalValue,
+  toClinicDateInputValue,
+  toClinicDateTimeLocalValue,
+} from "@/lib/datetime";
 import { getErrorMessage } from "@/lib/errors";
 import {
   type ProfissionalOption,
@@ -52,6 +60,7 @@ import {
   useCreateSolicitacao,
   useProfissionaisOptions,
   useRemarcarSolicitacao,
+  useSolicitacaoById,
   useServicosOptions,
   useSolicitacoesQuery,
 } from "@/features/solicitacoes/api";
@@ -135,27 +144,6 @@ const statusMeta: Record<
   },
 };
 
-function formatDate(date: string | null) {
-  if (!date) {
-    return "Nao informado";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-  }).format(new Date(`${date}T00:00:00`));
-}
-
-function formatDateTime(date: string | null) {
-  if (!date) {
-    return "Nao definido";
-  }
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(date));
-}
-
 function formatCurrency(value: number | null | undefined) {
   if (value === null || value === undefined) {
     return "Nao informado";
@@ -177,28 +165,18 @@ function formatJsonBlock(value: unknown) {
 
 function toDateTimeLocalValue(selected: SolicitacaoRecord | null) {
   if (selected?.data_hora_confirmada) {
-    return selected.data_hora_confirmada.slice(0, 16);
+    return toClinicDateTimeLocalValue(selected.data_hora_confirmada);
   }
 
   if (selected?.dia_desejado) {
     return `${selected.dia_desejado}T09:00`;
   }
 
-  const now = new Date();
-  now.setMinutes(0, 0, 0);
-  now.setHours(now.getHours() + 1);
-
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  return getClinicNextHourDateTimeLocalValue();
 }
 
 function toIsoStringFromLocalValue(value: string) {
-  return value ? new Date(value).toISOString() : null;
+  return value ? fromClinicDateTimeLocalValue(value) : null;
 }
 
 function hasRemarcacaoAgendaChanges(
@@ -252,10 +230,12 @@ const Solicitacoes = () => {
   const totalCount = solicitacoesQuery.data?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const selected = useMemo(
+  const selectedListItem = useMemo(
     () => (isCreatingNew ? null : items.find((item) => item.id === selectedId) ?? items[0] ?? null),
     [isCreatingNew, items, selectedId],
   );
+  const selectedDetailQuery = useSolicitacaoById(selectedListItem?.id ?? null);
+  const selected = selectedDetailQuery.data ?? selectedListItem;
   const pacienteContextQuery = usePacienteOperacaoContext({
     enabled: !isCreatingNew && Boolean(selected),
     pacienteId: selected?.paciente_id ?? null,
@@ -265,12 +245,12 @@ const Solicitacoes = () => {
   const isPendingSelected = selected ? SOLICITACAO_PENDING_STATUSES.includes(selected.status as never) : false;
   const remarcacaoVaiAtualizarAgenda = hasRemarcacaoAgendaChanges(selected, remarcacaoForm);
   const remarcacaoDataAtual = selected?.data_hora_confirmada
-    ? formatDateTime(selected.data_hora_confirmada)
+    ? formatClinicDateTime(selected.data_hora_confirmada)
     : selected?.dia_desejado
-      ? `${formatDate(selected.dia_desejado)} · ${selected.turno_desejado ?? "Sem turno"}`
+      ? `${formatClinicCalendarDate(selected.dia_desejado)} · ${selected.turno_desejado ?? "Sem turno"}`
       : "Nao informada";
   const remarcacaoNovaData = remarcacaoForm.dataHora
-    ? formatDateTime(toIsoStringFromLocalValue(remarcacaoForm.dataHora))
+    ? formatClinicDateTime(toIsoStringFromLocalValue(remarcacaoForm.dataHora))
     : "Sem nova data proposta";
 
   useEffect(() => {
@@ -283,10 +263,10 @@ const Solicitacoes = () => {
       return;
     }
 
-    if (!selected && items.length > 0) {
+    if (!selectedListItem && items.length > 0) {
       setSelectedId(items[0].id);
     }
-  }, [isCreatingNew, items, selected, targetSolicitacaoId]);
+  }, [isCreatingNew, items, selectedListItem, targetSolicitacaoId]);
 
   useEffect(() => {
     if (selected) {
@@ -304,7 +284,13 @@ const Solicitacoes = () => {
       setActionMode(null);
       setRemarcacaoModalOpen(false);
     }
-  }, [selected?.id]);
+  }, [
+    selected?.data_hora_confirmada,
+    selected?.id,
+    selected?.observacoes_admin,
+    selected?.profissional_id,
+    selected?.servico_id,
+  ]);
 
   useEffect(() => {
     setPage(1);
@@ -417,8 +403,10 @@ const Solicitacoes = () => {
     }
 
     try {
+      const dataHoraIso = fromClinicDateTimeLocalValue(dataHora);
+
       await confirmarMutation.mutateAsync({
-        dataHora: new Date(dataHora).toISOString(),
+        dataHora: dataHoraIso!,
         observacoesAdmin,
         profissionalId,
         servicoId,
@@ -603,6 +591,13 @@ const Solicitacoes = () => {
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Carregando solicitações...
               </div>
+            ) : solicitacoesQuery.isError ? (
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-12 text-center text-sm text-destructive">
+                <p className="font-semibold">Nao foi possivel carregar as solicitacoes.</p>
+                <p className="mt-2 text-destructive/80">
+                  {getErrorMessage(solicitacoesQuery.error, "Revise as colunas da tabela solicitacoes_agendamento.")}
+                </p>
+              </div>
             ) : items.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
                 Nenhuma solicitação encontrada com os filtros atuais.
@@ -648,7 +643,7 @@ const Solicitacoes = () => {
                           <TableCell>{item.procedimento_nome}</TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              <p>{formatDate(item.dia_desejado)}</p>
+                              <p>{formatClinicCalendarDate(item.dia_desejado)}</p>
                               <p className="text-xs capitalize text-muted-foreground">
                                 {item.turno_desejado ?? "Sem turno"}
                               </p>
@@ -865,7 +860,7 @@ const Solicitacoes = () => {
                     {selected.agendamento_id && selected.data_hora_confirmada ? (
                       <Button asChild size="sm" type="button" variant="outline">
                         <Link
-                          to={`/admin/agenda?agendamentoId=${selected.agendamento_id}&date=${selected.data_hora_confirmada.slice(0, 10)}`}
+                          to={`/admin/agenda?agendamentoId=${selected.agendamento_id}&date=${toClinicDateInputValue(selected.data_hora_confirmada)}`}
                         >
                           Abrir agenda
                           <ArrowUpRight className="h-4 w-4" />
@@ -886,10 +881,10 @@ const Solicitacoes = () => {
                   <InfoBlock
                     icon={CalendarClock}
                     label="Preferência inicial"
-                    value={`${formatDate(selected.dia_desejado)} · ${selected.turno_desejado ?? "Sem turno"}`}
+                    value={`${formatClinicCalendarDate(selected.dia_desejado)} · ${selected.turno_desejado ?? "Sem turno"}`}
                   />
                   <InfoBlock label="Procedimento" value={selected.procedimento_nome} />
-                  <InfoBlock label="Confirmado para" value={formatDateTime(selected.data_hora_confirmada)} />
+                  <InfoBlock label="Confirmado para" value={formatClinicDateTime(selected.data_hora_confirmada)} />
                 </div>
 
                 <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
@@ -898,7 +893,7 @@ const Solicitacoes = () => {
                     {(statusMeta[selected.status] ?? statusMeta.novo).helper}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Criado em {formatDateTime(selected.created_at)}
+                    Criado em {formatClinicDateTime(selected.created_at)}
                   </p>
                 </div>
 
@@ -971,7 +966,7 @@ const Solicitacoes = () => {
                                       </Badge>
                                     </div>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                      {formatDateTime(item.data_hora)} · {item.profissional_nome}
+                                      {formatClinicDateTime(item.data_hora)} · {item.profissional_nome}
                                     </p>
                                   </div>
                                 ))}
@@ -1009,7 +1004,7 @@ const Solicitacoes = () => {
                                       </Badge>
                                     </div>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                      {item.procedimento_nome} · {formatDateTime(item.created_at)}
+                                      {item.procedimento_nome} · {formatClinicDateTime(item.created_at)}
                                     </p>
                                   </div>
                                 ))}
