@@ -222,6 +222,7 @@ export type Database = {
           created_at: string;
           data_hora_confirmada: string | null;
           dia_desejado: string | null;
+          horario_desejado: string | null;
           id: string;
           nome_cliente: string;
           observacoes_admin: string | null;
@@ -236,7 +237,6 @@ export type Database = {
           status: string;
           telefone_cliente: string;
           tipo_atendimento: "particular" | "convenio" | null;
-          turno_desejado: "manha" | "tarde" | "noite" | "comercial" | null;
           updated_at: string;
         };
         Insert: {
@@ -246,6 +246,7 @@ export type Database = {
           created_at?: string;
           data_hora_confirmada?: string | null;
           dia_desejado?: string | null;
+          horario_desejado?: string | null;
           id?: string;
           nome_cliente: string;
           observacoes_admin?: string | null;
@@ -260,7 +261,6 @@ export type Database = {
           status?: string;
           telefone_cliente: string;
           tipo_atendimento?: "particular" | "convenio" | null;
-          turno_desejado?: "manha" | "tarde" | "noite" | "comercial" | null;
           updated_at?: string;
         };
         Update: {
@@ -270,6 +270,7 @@ export type Database = {
           created_at?: string;
           data_hora_confirmada?: string | null;
           dia_desejado?: string | null;
+          horario_desejado?: string | null;
           id?: string;
           nome_cliente?: string;
           observacoes_admin?: string | null;
@@ -284,7 +285,6 @@ export type Database = {
           status?: string;
           telefone_cliente?: string;
           tipo_atendimento?: "particular" | "convenio" | null;
-          turno_desejado?: "manha" | "tarde" | "noite" | "comercial" | null;
           updated_at?: string;
         };
         Relationships: [
@@ -355,6 +355,7 @@ export type Database = {
         Args: {
           p_data_hora: string;
           p_observacoes_admin?: string | null;
+          p_paciente_id?: string | null;
           p_profissional_id: string;
           p_servico_id: string;
           p_solicitacao_id: string;

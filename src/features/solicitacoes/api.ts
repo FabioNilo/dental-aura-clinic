@@ -34,13 +34,13 @@ export type SolicitacaoLinkedRecord = Pick<
   | "created_at"
   | "data_hora_confirmada"
   | "dia_desejado"
+  | "horario_desejado"
   | "id"
   | "observacoes_admin"
   | "observacoes_cliente"
   | "origem"
   | "procedimento_nome"
   | "status"
-  | "turno_desejado"
 >;
 
 export type SolicitacaoFilters = {
@@ -53,6 +53,7 @@ export type SolicitacaoFilters = {
 export type ConfirmarSolicitacaoInput = {
   dataHora: string;
   observacoesAdmin?: string;
+  pacienteId?: string | null;
   profissionalId: string;
   servicoId: string;
   solicitacaoId: string;
@@ -74,13 +75,13 @@ export type RemarcarSolicitacaoInput = {
 
 export type CreateSolicitacaoInput = {
   diaDesejado?: string | null;
+  horarioDesejado?: string | null;
   nomeCliente: string;
   observacoesAdmin?: string | null;
   observacoesCliente?: string | null;
   procedimentoNome: string;
   telefoneCliente: string;
   tipoAtendimento?: "convenio" | "particular" | null;
-  turnoDesejado?: "comercial" | "manha" | "noite" | "tarde" | null;
 };
 
 type SolicitacaoRawRecord = Record<string, unknown>;
@@ -95,7 +96,7 @@ const SOLICITACOES_LIST_SELECT = `
   telefone_cliente,
   procedimento_nome,
   dia_desejado,
-  turno_desejado
+  horario_desejado
 `;
 
 const SOLICITACAO_DETAIL_SELECT_PREFERRED = `
@@ -115,7 +116,7 @@ const SOLICITACAO_DETAIL_SELECT_PREFERRED = `
   procedimento_nome,
   tipo_atendimento,
   dia_desejado,
-  turno_desejado,
+  horario_desejado,
   data_hora_confirmada,
   observacoes_cliente,
   observacoes_admin,
@@ -139,7 +140,7 @@ const SOLICITACAO_DETAIL_SELECT_FALLBACK = `
   telefone_cliente,
   procedimento_nome,
   dia_desejado,
-  turno_desejado,
+  horario_desejado,
   data_hora_confirmada,
   observacoes_cliente,
   observacoes_admin
@@ -220,6 +221,8 @@ function normalizeSolicitacaoRecord(record: SolicitacaoRawRecord) {
     data_hora_confirmada:
       typeof record.data_hora_confirmada === "string" ? record.data_hora_confirmada : null,
     dia_desejado: typeof record.dia_desejado === "string" ? record.dia_desejado : null,
+    horario_desejado:
+      typeof record.horario_desejado === "string" ? record.horario_desejado : null,
     id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
     nome_cliente: typeof record.nome_cliente === "string" ? record.nome_cliente : "Paciente",
     observacoes_admin: typeof record.observacoes_admin === "string" ? record.observacoes_admin : null,
@@ -239,13 +242,6 @@ function normalizeSolicitacaoRecord(record: SolicitacaoRawRecord) {
     tipo_atendimento:
       record.tipo_atendimento === "convenio" || record.tipo_atendimento === "particular"
         ? record.tipo_atendimento
-        : null,
-    turno_desejado:
-      record.turno_desejado === "comercial" ||
-      record.turno_desejado === "manha" ||
-      record.turno_desejado === "noite" ||
-      record.turno_desejado === "tarde"
-        ? record.turno_desejado
         : null,
     updated_at: typeof record.updated_at === "string" ? record.updated_at : new Date(0).toISOString(),
   } satisfies SolicitacaoRecord;
@@ -410,7 +406,7 @@ export function useSolicitacaoVinculadaQuery(agendamentoId?: string | null) {
       const { data, error } = await supabase
         .from("solicitacoes_agendamento")
         .select(
-          "id, agendamento_id, codigo_externo, status, origem, canal_origem, procedimento_nome, dia_desejado, turno_desejado, data_hora_confirmada, observacoes_cliente, observacoes_admin, created_at",
+          "id, agendamento_id, codigo_externo, status, origem, canal_origem, procedimento_nome, dia_desejado, horario_desejado, data_hora_confirmada, observacoes_cliente, observacoes_admin, created_at",
         )
         .eq("agendamento_id", agendamentoId!)
         .order("created_at", { ascending: false })
@@ -433,6 +429,7 @@ export function useConfirmarSolicitacao() {
       const { data, error } = await supabase.rpc("confirmar_solicitacao_agendamento", {
         p_data_hora: input.dataHora,
         p_observacoes_admin: input.observacoesAdmin ?? null,
+        p_paciente_id: input.pacienteId ?? null,
         p_profissional_id: input.profissionalId,
         p_servico_id: input.servicoId,
         p_solicitacao_id: input.solicitacaoId,
@@ -458,17 +455,18 @@ export function useCreateSolicitacao() {
       const resumoAtendimento = {
         captado_por: "painel_admin",
         dia_desejado: input.diaDesejado ?? null,
+        horario_desejado: input.horarioDesejado ?? null,
         nome_cliente: input.nomeCliente,
         observacoes_cliente: input.observacoesCliente ?? null,
         procedimento_nome: input.procedimentoNome,
         telefone_cliente: input.telefoneCliente,
         tipo_atendimento: input.tipoAtendimento ?? null,
-        turno_desejado: input.turnoDesejado ?? null,
       };
 
       const payload: TablesInsert<"solicitacoes_agendamento"> = {
         canal_origem: "painel_admin",
         dia_desejado: input.diaDesejado ?? null,
+        horario_desejado: input.horarioDesejado ?? null,
         nome_cliente: input.nomeCliente,
         observacoes_admin: input.observacoesAdmin ?? null,
         observacoes_cliente: input.observacoesCliente ?? null,
@@ -482,7 +480,6 @@ export function useCreateSolicitacao() {
         status: "aguardando_confirmacao",
         telefone_cliente: input.telefoneCliente,
         tipo_atendimento: input.tipoAtendimento ?? null,
-        turno_desejado: input.turnoDesejado ?? null,
       };
 
       const { data, error } = await supabase
@@ -522,7 +519,7 @@ export function useRemarcarSolicitacao() {
 
         if (hasNewFields) {
           throw new Error(
-            "A remarcacao com nova data, profissional ou servico precisa da migration 20260410000005_update_remarcacao_solicitacao.sql aplicada no Supabase.",
+            "A remarcacao com nova data, profissional ou servico precisa da RPC atualizada no Supabase. Aplique a migration 20260421000009_recreate_remarcacao_rpc_with_horario.sql.",
           );
         }
 

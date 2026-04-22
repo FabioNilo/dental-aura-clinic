@@ -1,7 +1,7 @@
-import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Pacientes from "@/pages/admin/Pacientes";
+import { TestMemoryRouter } from "@/test/router";
 
 const createPacienteMock = vi.fn();
 const updatePacienteMock = vi.fn();
@@ -72,9 +72,9 @@ describe("Pacientes page", () => {
 
   it("creates a new patient with the filled form values", async () => {
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <Pacientes />
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /novo paciente/i }));

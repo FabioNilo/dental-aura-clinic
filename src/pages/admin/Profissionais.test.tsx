@@ -1,7 +1,7 @@
-import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Profissionais from "@/pages/admin/Profissionais";
+import { TestMemoryRouter } from "@/test/router";
 
 const createProfissionalMock = vi.fn();
 const updateProfissionalMock = vi.fn();
@@ -68,9 +68,9 @@ describe("Profissionais page", () => {
 
   it("creates a new professional with the filled form values", async () => {
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <Profissionais />
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Novo profissional" }));

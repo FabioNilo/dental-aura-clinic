@@ -23,10 +23,10 @@ export type PacienteHistoricoSolicitacao = Pick<
   | "created_at"
   | "data_hora_confirmada"
   | "dia_desejado"
+  | "horario_desejado"
   | "id"
   | "procedimento_nome"
   | "status"
-  | "turno_desejado"
 >;
 export type PacienteOperacaoContext = {
   matchedByPhone: boolean;
@@ -291,7 +291,7 @@ export function usePacienteOperacaoContext(filters: PacienteOperacaoFilters) {
         supabase
           .from("solicitacoes_agendamento")
           .select(
-            "id, codigo_externo, status, procedimento_nome, created_at, dia_desejado, turno_desejado, data_hora_confirmada",
+            "id, codigo_externo, status, procedimento_nome, created_at, dia_desejado, horario_desejado, data_hora_confirmada",
           )
           .eq("paciente_id", paciente.id)
           .order("created_at", { ascending: false })

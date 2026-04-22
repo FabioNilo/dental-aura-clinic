@@ -1,7 +1,8 @@
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ClinicAuthProvider, RequireAdmin } from "@/features/auth/ClinicAuth";
+import { TestMemoryRouter } from "@/test/router";
 
 const {
   fromMock,
@@ -77,7 +78,7 @@ describe("Clinic auth routing", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/admin/solicitacoes"]}>
+      <TestMemoryRouter initialEntries={["/admin/solicitacoes"]}>
         <ClinicAuthProvider>
           <Routes>
             <Route path="/admin/login" element={<div>PAGINA LOGIN</div>} />
@@ -91,7 +92,7 @@ describe("Clinic auth routing", () => {
             />
           </Routes>
         </ClinicAuthProvider>
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     await waitFor(() => {
@@ -129,7 +130,7 @@ describe("Clinic auth routing", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/admin/solicitacoes"]}>
+      <TestMemoryRouter initialEntries={["/admin/solicitacoes"]}>
         <ClinicAuthProvider>
           <Routes>
             <Route path="/admin/login" element={<div>PAGINA LOGIN</div>} />
@@ -143,7 +144,7 @@ describe("Clinic auth routing", () => {
             />
           </Routes>
         </ClinicAuthProvider>
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     await waitFor(() => {

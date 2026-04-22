@@ -1,7 +1,8 @@
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminLogin from "@/pages/admin/AdminLogin";
+import { TestMemoryRouter } from "@/test/router";
 
 const signInMock = vi.fn();
 
@@ -26,7 +27,7 @@ describe("AdminLogin", () => {
 
   it("submits email and password then navigates to the admin route", async () => {
     render(
-      <MemoryRouter
+      <TestMemoryRouter
         initialEntries={[
           {
             pathname: "/admin/login",
@@ -38,7 +39,7 @@ describe("AdminLogin", () => {
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/solicitacoes" element={<div>Fila aberta</div>} />
         </Routes>
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.change(screen.getByLabelText("Email"), {

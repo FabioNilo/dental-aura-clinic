@@ -68,13 +68,13 @@ import {
 type ActionMode = "cancelar" | "confirmar" | "remarcar" | null;
 type CreateFormState = {
   diaDesejado: string;
+  horarioDesejado: string;
   nomeCliente: string;
   observacoesAdmin: string;
   observacoesCliente: string;
   procedimentoNome: string;
   telefoneCliente: string;
   tipoAtendimento: "" | "convenio" | "particular";
-  turnoDesejado: "" | "comercial" | "manha" | "noite" | "tarde";
 };
 type RemarcacaoFormState = {
   confirmaAtualizacaoAgendamento: boolean;
@@ -87,13 +87,13 @@ type RemarcacaoFormState = {
 const PAGE_SIZE = 10;
 const CREATE_SOLICITACAO_DEFAULTS: CreateFormState = {
   diaDesejado: "",
+  horarioDesejado: "",
   nomeCliente: "",
   observacoesAdmin: "",
   observacoesCliente: "",
   procedimentoNome: "Consulta geral",
   telefoneCliente: "",
   tipoAtendimento: "",
-  turnoDesejado: "",
 };
 const REMARCACAO_DEFAULTS: RemarcacaoFormState = {
   confirmaAtualizacaoAgendamento: false,
@@ -169,7 +169,7 @@ function toDateTimeLocalValue(selected: SolicitacaoRecord | null) {
   }
 
   if (selected?.dia_desejado) {
-    return `${selected.dia_desejado}T09:00`;
+    return `${selected.dia_desejado}T${toHorarioInputValue(selected.horario_desejado) || "09:00"}`;
   }
 
   return getClinicNextHourDateTimeLocalValue();
@@ -177,6 +177,25 @@ function toDateTimeLocalValue(selected: SolicitacaoRecord | null) {
 
 function toIsoStringFromLocalValue(value: string) {
   return value ? fromClinicDateTimeLocalValue(value) : null;
+}
+
+function toHorarioInputValue(value: string | null | undefined) {
+  return value ? value.slice(0, 5) : "";
+}
+
+function formatPreferenciaDesejada(
+  diaDesejado: string | null | undefined,
+  horarioDesejado: string | null | undefined,
+) {
+  if (!diaDesejado) {
+    return "Nao informada";
+  }
+
+  if (!horarioDesejado) {
+    return formatClinicCalendarDate(diaDesejado);
+  }
+
+  return `${formatClinicCalendarDate(diaDesejado)} · ${toHorarioInputValue(horarioDesejado)}`;
 }
 
 function hasRemarcacaoAgendaChanges(
@@ -246,9 +265,7 @@ const Solicitacoes = () => {
   const remarcacaoVaiAtualizarAgenda = hasRemarcacaoAgendaChanges(selected, remarcacaoForm);
   const remarcacaoDataAtual = selected?.data_hora_confirmada
     ? formatClinicDateTime(selected.data_hora_confirmada)
-    : selected?.dia_desejado
-      ? `${formatClinicCalendarDate(selected.dia_desejado)} · ${selected.turno_desejado ?? "Sem turno"}`
-      : "Nao informada";
+    : formatPreferenciaDesejada(selected?.dia_desejado, selected?.horario_desejado);
   const remarcacaoNovaData = remarcacaoForm.dataHora
     ? formatClinicDateTime(toIsoStringFromLocalValue(remarcacaoForm.dataHora))
     : "Sem nova data proposta";
@@ -358,13 +375,13 @@ const Solicitacoes = () => {
     try {
       const created = await createSolicitacaoMutation.mutateAsync({
         diaDesejado: createForm.diaDesejado || null,
+        horarioDesejado: createForm.horarioDesejado || null,
         nomeCliente: createForm.nomeCliente.trim(),
         observacoesAdmin: createForm.observacoesAdmin.trim() || null,
         observacoesCliente: createForm.observacoesCliente.trim() || null,
         procedimentoNome: createForm.procedimentoNome.trim() || "Consulta geral",
         telefoneCliente: createForm.telefoneCliente.trim(),
         tipoAtendimento: createForm.tipoAtendimento || null,
-        turnoDesejado: createForm.turnoDesejado || null,
       });
 
       setIsCreatingNew(false);
@@ -408,6 +425,7 @@ const Solicitacoes = () => {
       await confirmarMutation.mutateAsync({
         dataHora: dataHoraIso!,
         observacoesAdmin,
+        pacienteId: selected.paciente_id ?? pacienteContextQuery.data?.paciente?.id ?? null,
         profissionalId,
         servicoId,
         solicitacaoId: selected.id,
@@ -645,7 +663,7 @@ const Solicitacoes = () => {
                             <div className="text-sm">
                               <p>{formatClinicCalendarDate(item.dia_desejado)}</p>
                               <p className="text-xs capitalize text-muted-foreground">
-                                {item.turno_desejado ?? "Sem turno"}
+                                {toHorarioInputValue(item.horario_desejado) || "Sem horario"}
                               </p>
                             </div>
                           </TableCell>
@@ -752,21 +770,13 @@ const Solicitacoes = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="create-turno-desejado">Turno desejado</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      id="create-turno-desejado"
-                      onChange={(event) =>
-                        handleCreateFieldChange("turnoDesejado", event.target.value as CreateFormState["turnoDesejado"])
-                      }
-                      value={createForm.turnoDesejado}
-                    >
-                      <option value="">Não informado</option>
-                      <option value="manha">Manhã</option>
-                      <option value="tarde">Tarde</option>
-                      <option value="noite">Noite</option>
-                      <option value="comercial">Horário comercial</option>
-                    </select>
+                    <Label htmlFor="create-horario-desejado">Horario desejado</Label>
+                    <Input
+                      id="create-horario-desejado"
+                      onChange={(event) => handleCreateFieldChange("horarioDesejado", event.target.value)}
+                      type="time"
+                      value={createForm.horarioDesejado}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="create-tipo-atendimento">Tipo de atendimento</Label>
@@ -881,7 +891,7 @@ const Solicitacoes = () => {
                   <InfoBlock
                     icon={CalendarClock}
                     label="Preferência inicial"
-                    value={`${formatClinicCalendarDate(selected.dia_desejado)} · ${selected.turno_desejado ?? "Sem turno"}`}
+                    value={formatPreferenciaDesejada(selected.dia_desejado, selected.horario_desejado)}
                   />
                   <InfoBlock label="Procedimento" value={selected.procedimento_nome} />
                   <InfoBlock label="Confirmado para" value={formatClinicDateTime(selected.data_hora_confirmada)} />
@@ -1338,10 +1348,10 @@ function RemarcacaoDialog({
               />
             </div>
 
-            {selected.turno_desejado ? (
+            {selected.horario_desejado ? (
               <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
-                Turno atual da solicitacao: <span className="font-medium text-foreground">{selected.turno_desejado}</span>.
-                Se voce informar nova data e hora, o turno sera recalculado automaticamente.
+                Horario atual da solicitacao:{" "}<span className="font-medium text-foreground">{toHorarioInputValue(selected.horario_desejado)}</span>.
+                Se voce informar nova data e hora, a preferencia de horario sera atualizada automaticamente.
               </div>
             ) : null}
 
@@ -1469,3 +1479,5 @@ function JsonPanel({
 }
 
 export default Solicitacoes;
+
+

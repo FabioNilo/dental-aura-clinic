@@ -1,7 +1,7 @@
-import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Agenda from "@/pages/admin/Agenda";
+import { TestMemoryRouter } from "@/test/router";
 
 const updateStatusMock = vi.fn();
 const refetchMock = vi.fn();
@@ -52,13 +52,13 @@ vi.mock("@/features/solicitacoes/api", () => ({
       created_at: "2026-04-03T10:00:00.000Z",
       data_hora_confirmada: "2026-04-05T17:30:00.000Z",
       dia_desejado: "2026-04-05",
+      horario_desejado: "14:30:00",
       id: "sol-1",
       observacoes_admin: "Paciente confirmado.",
       observacoes_cliente: "Prefere periodo da tarde.",
       origem: "manual",
       procedimento_nome: "Consulta geral",
       status: "agendado",
-      turno_desejado: "tarde",
     },
     isLoading: false,
   }),
@@ -100,9 +100,9 @@ describe("Agenda page", () => {
 
   it("updates the selected appointment status", async () => {
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <Agenda />
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.change(screen.getByLabelText(/status do agendamento/i), {

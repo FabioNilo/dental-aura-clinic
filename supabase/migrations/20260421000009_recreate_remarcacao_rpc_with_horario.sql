@@ -1,3 +1,7 @@
+drop function if exists public.remarcar_solicitacao_agendamento(uuid, text);
+drop function if exists public.remarcar_solicitacao_agendamento(text, uuid);
+drop function if exists public.remarcar_solicitacao_agendamento(uuid, text, timestamptz, uuid, uuid);
+
 create or replace function public.remarcar_solicitacao_agendamento(
   p_solicitacao_id uuid,
   p_observacoes_admin text default null,

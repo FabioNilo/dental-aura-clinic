@@ -1,7 +1,7 @@
-import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Solicitacoes from "@/pages/admin/Solicitacoes";
+import { TestMemoryRouter } from "@/test/router";
 
 const confirmarMutateAsyncMock = vi.fn();
 const remarcarMutateAsyncMock = vi.fn();
@@ -57,6 +57,7 @@ vi.mock("@/features/solicitacoes/api", () => ({
       created_at: "2026-04-03T12:00:00.000Z",
       data_hora_confirmada: "2026-04-05T17:30:00.000Z",
       dia_desejado: "2026-04-05",
+      horario_desejado: "14:30:00",
       id: "sol-1",
       nome_cliente: "Maria Souza",
       observacoes_admin: null,
@@ -71,7 +72,6 @@ vi.mock("@/features/solicitacoes/api", () => ({
       status: "novo",
       telefone_cliente: "11999998888",
       tipo_atendimento: "particular",
-      turno_desejado: "tarde",
       updated_at: "2026-04-03T12:00:00.000Z",
     },
     isLoading: false,
@@ -89,12 +89,12 @@ vi.mock("@/features/solicitacoes/api", () => ({
           codigo_externo: "SOL-20260403-000001",
           created_at: "2026-04-03T12:00:00.000Z",
           dia_desejado: "2026-04-05",
+          horario_desejado: "14:30:00",
           id: "sol-1",
           nome_cliente: "Maria Souza",
           procedimento_nome: "Consulta geral",
           status: "novo",
           telefone_cliente: "11999998888",
-          turno_desejado: "tarde",
         },
       ],
       page: 1,
@@ -145,6 +145,7 @@ describe("Solicitacoes page", () => {
       created_at: "2026-04-03T12:00:00.000Z",
       data_hora_confirmada: null,
       dia_desejado: "2026-04-08",
+      horario_desejado: "15:00:00",
       id: "sol-2",
       nome_cliente: "Joao Pereira",
       observacoes_admin: "Ligou pela recepcao.",
@@ -159,16 +160,15 @@ describe("Solicitacoes page", () => {
       status: "aguardando_confirmacao",
       telefone_cliente: "11977776666",
       tipo_atendimento: "particular",
-      turno_desejado: "comercial",
       updated_at: "2026-04-03T12:00:00.000Z",
     });
   });
 
   it("opens the selected request and confirms it with the chosen data", async () => {
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <Solicitacoes />
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
@@ -190,6 +190,7 @@ describe("Solicitacoes page", () => {
       expect(confirmarMutateAsyncMock).toHaveBeenCalledWith({
         dataHora: "2026-04-05T17:30:00.000Z",
         observacoesAdmin: "Paciente confirmado no periodo da tarde.",
+        pacienteId: "pac-1",
         profissionalId: "prof-1",
         servicoId: "serv-1",
         solicitacaoId: "sol-1",
@@ -199,9 +200,9 @@ describe("Solicitacoes page", () => {
 
   it("opens the remarcacao modal and saves a new proposed date", async () => {
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <Solicitacoes />
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Remarcar" }));
@@ -209,7 +210,7 @@ describe("Solicitacoes page", () => {
     expect(screen.getByRole("dialog", { name: /remarcar solicitacao/i })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/nova data e hora/i), {
-      target: { value: "2026-04-20T11:00" },
+      target: { value: "2099-04-20T11:00" },
     });
     fireEvent.change(screen.getByLabelText(/profissional/i), {
       target: { value: "prof-1" },
@@ -226,7 +227,7 @@ describe("Solicitacoes page", () => {
     await waitFor(() => {
       expect(remarcarMutateAsyncMock).toHaveBeenCalledWith({
         confirmaAtualizacaoAgendamento: true,
-        dataHora: "2026-04-20T14:00:00.000Z",
+        dataHora: "2099-04-20T14:00:00.000Z",
         observacoesAdmin: "Paciente pediu novo horario.",
         profissionalId: "prof-1",
         servicoId: "serv-1",
@@ -237,9 +238,9 @@ describe("Solicitacoes page", () => {
 
   it("creates a manual request from the admin panel", async () => {
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <Solicitacoes />
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /nova solicita/i }));
@@ -255,8 +256,8 @@ describe("Solicitacoes page", () => {
     fireEvent.change(screen.getByLabelText(/dia desejado/i), {
       target: { value: "2026-04-08" },
     });
-    fireEvent.change(screen.getByLabelText(/turno desejado/i), {
-      target: { value: "comercial" },
+    fireEvent.change(screen.getByLabelText(/horario desejado/i), {
+      target: { value: "15:00" },
     });
     fireEvent.change(screen.getByLabelText(/tipo de atendimento/i), {
       target: { value: "particular" },
@@ -272,13 +273,13 @@ describe("Solicitacoes page", () => {
     await waitFor(() => {
       expect(createSolicitacaoMutateAsyncMock).toHaveBeenCalledWith({
         diaDesejado: "2026-04-08",
+        horarioDesejado: "15:00",
         nomeCliente: "Joao Pereira",
         observacoesAdmin: "Ligou pela recepcao.",
         observacoesCliente: "Prefere horario comercial.",
         procedimentoNome: "Avaliacao",
         telefoneCliente: "11977776666",
         tipoAtendimento: "particular",
-        turnoDesejado: "comercial",
       });
     });
   });

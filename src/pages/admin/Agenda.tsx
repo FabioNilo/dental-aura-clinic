@@ -92,6 +92,21 @@ const solicitacaoStatusMeta: Record<string, { badgeClassName: string; label: str
   },
 };
 
+function formatHorarioDesejado(value: string | null | undefined) {
+  return value ? value.slice(0, 5) : "Sem horario";
+}
+
+function formatPreferenciaInicial(
+  diaDesejado: string | null | undefined,
+  horarioDesejado: string | null | undefined,
+) {
+  if (!diaDesejado) {
+    return "Sem dia";
+  }
+
+  return `${diaDesejado} · ${formatHorarioDesejado(horarioDesejado)}`;
+}
+
 const Agenda = () => {
   const [searchParams] = useSearchParams();
   const targetAgendamentoId = searchParams.get("agendamentoId");
@@ -393,9 +408,10 @@ const Agenda = () => {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <InfoBlock
                           label="Preferencia inicial"
-                          value={`${solicitacaoVinculadaQuery.data.dia_desejado ?? "Sem dia"} · ${
-                            solicitacaoVinculadaQuery.data.turno_desejado ?? "Sem turno"
-                          }`}
+                          value={formatPreferenciaInicial(
+                            solicitacaoVinculadaQuery.data.dia_desejado,
+                            solicitacaoVinculadaQuery.data.horario_desejado,
+                          )}
                         />
                         <InfoBlock
                           label="Confirmado em"

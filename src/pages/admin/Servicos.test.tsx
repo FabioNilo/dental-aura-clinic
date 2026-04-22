@@ -1,7 +1,7 @@
-import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Servicos from "@/pages/admin/Servicos";
+import { TestMemoryRouter } from "@/test/router";
 
 const createServicoMock = vi.fn();
 const updateServicoMock = vi.fn();
@@ -66,9 +66,9 @@ describe("Servicos page", () => {
 
   it("creates a new service with the filled form values", async () => {
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <Servicos />
-      </MemoryRouter>,
+      </TestMemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /novo servico/i }));
