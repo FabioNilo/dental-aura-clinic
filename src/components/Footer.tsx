@@ -1,25 +1,32 @@
+const footerLinks = [
+  { label: "Inicio", href: "#inicio" },
+  { label: "Servicos", href: "#servicos" },
+  { label: "Agendar", href: "#agendar" },
+  { label: "Contato", href: "#contato" },
+];
+
 const Footer = () => {
   return (
     <footer id="contato" className="w-full border-t border-border bg-secondary">
-      <div className="flex flex-col md:flex-row justify-between items-center px-6 lg:px-20 py-12 gap-8 max-w-7xl mx-auto">
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-8 px-6 py-12 md:flex-row lg:px-20">
         <span className="text-lg font-extrabold font-headline text-primary">
-          Clínica Sorriso
+          Clinica Sorriso
         </span>
 
         <div className="flex flex-wrap justify-center gap-8">
-          {["Privacidade", "Termos de Uso", "Trabalhe Conosco"].map((item) => (
+          {footerLinks.map((item) => (
             <a
-              key={item}
-              href="#"
-              className="text-xs uppercase tracking-widest font-medium text-muted-foreground hover:text-primary underline decoration-primary/40 underline-offset-4 transition-colors"
+              key={item.label}
+              href={item.href}
+              className="text-xs uppercase tracking-widest font-medium text-muted-foreground underline decoration-primary/40 underline-offset-4 transition-colors hover:text-primary"
             >
-              {item}
+              {item.label}
             </a>
           ))}
         </div>
 
         <p className="text-xs uppercase tracking-widest font-medium text-muted-foreground">
-          © 2024 Clínica Sorriso. Todos os direitos reservados.
+          © 2024 Clinica Sorriso. Todos os direitos reservados.
         </p>
       </div>
     </footer>

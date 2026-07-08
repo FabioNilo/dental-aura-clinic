@@ -50,7 +50,7 @@ const ServicesSection = () => {
                 {service.description}
               </p>
               <a
-                href="#"
+                href="#agendar"
                 className="inline-flex items-center gap-2 text-primary font-bold text-sm group-hover:gap-4 transition-all"
               >
                 Saiba mais <ArrowRight size={16} />

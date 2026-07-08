@@ -58,4 +58,22 @@ describe("AdminLogin", () => {
       expect(screen.getByText("Fila aberta")).toBeInTheDocument();
     });
   });
+
+  it("shows the backend error when the login fails", async () => {
+    signInMock.mockRejectedValueOnce(new Error("Credenciais invalidas"));
+
+    render(
+      <TestMemoryRouter initialEntries={["/admin/login"]}>
+        <Routes>
+          <Route path="/admin/login" element={<AdminLogin />} />
+        </Routes>
+      </TestMemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Acessar painel" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Credenciais invalidas")).toBeInTheDocument();
+    });
+  });
 });

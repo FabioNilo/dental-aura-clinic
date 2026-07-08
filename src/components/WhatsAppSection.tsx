@@ -2,7 +2,7 @@ import { Bot, Send, Smile } from "lucide-react";
 
 const WhatsAppSection = () => {
   return (
-    <section id="sobre" className="py-24 bg-background">
+    <section id="agendar" className="py-24 bg-background">
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="bg-foreground rounded-4xl p-10 lg:p-20 relative overflow-hidden flex flex-col lg:flex-row gap-16 items-center">
           {/* Decorative gradient */}

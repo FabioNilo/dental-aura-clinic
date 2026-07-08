@@ -5,7 +5,7 @@ const navLinks = [
   { label: "Início", href: "#inicio", active: true },
   { label: "Serviços", href: "#servicos" },
   { label: "Ortodontia", href: "#ortodontia" },
-  { label: "Sobre", href: "#sobre" },
+  { label: "Agendar", href: "#agendar" },
   { label: "Contato", href: "#contato" },
 ];
 

@@ -36,7 +36,7 @@ const AdminTopbar = () => {
   // Detectar se é rota de paciente detalhes
   const isPacienteDetalhes = location.pathname.match(/^\/admin\/pacientes\/[^/]+$/);
   
-  let meta = isPacienteDetalhes 
+  const meta = isPacienteDetalhes 
     ? {
         title: "Detalhes do Paciente",
         subtitle: "Prontuário completo, histórico de tratamentos e consultas.",

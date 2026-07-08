@@ -42,7 +42,15 @@ insert into public.user_roles (user_id, role)
 values ('SEU-USER-ID', 'admin');
 ```
 
-4. Configurar o n8n com `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
+4. O bridge de login via n8n tambem pode validar `clinic.access_roles` no schema novo. Durante a transicao, mantenha a role em `public.user_roles` para nao quebrar o acesso atual.
+
+```sql
+insert into clinic.access_roles (email, role, identity_provider)
+values ('admin@clinica.com', 'admin', 'n8n');
+```
+
+5. Configurar o n8n com `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
+6. Para habilitar login via n8n no painel, configurar `VITE_AUTH_PROVIDER=n8n` ou `hybrid` e `VITE_N8N_AUTH_URL` no frontend.
 
 ## Dados de desenvolvimento
 
@@ -83,6 +91,7 @@ Documentacao complementar:
 
 - `docs/etapa-1-expansao-n8n-clinica.md`
 - `docs/n8n-atendimento-clinica-v1.md`
+- `docs/PLANO_MIGRACAO_BACKEND_N8N.md`
 - `Atendimento Ajuste.json`
 
 ## 🆕 Módulo Financeiro (v1.0)

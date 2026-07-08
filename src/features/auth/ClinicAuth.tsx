@@ -12,6 +12,11 @@ import { Navigate, useLocation } from "react-router-dom";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getErrorMessage } from "@/lib/errors";
+import {
+  resolveAdminRole,
+  signInClinicAdmin,
+  signOutClinicAdmin,
+} from "./clinic-auth-service";
 
 type ClinicAuthContextValue = {
   isAdmin: boolean;
@@ -24,36 +29,6 @@ type ClinicAuthContextValue = {
 };
 
 const ClinicAuthContext = createContext<ClinicAuthContextValue | null>(null);
-
-async function resolveAdminRole(userId: string | null) {
-  if (!userId) {
-    return false;
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .limit(1);
-
-    if (error) {
-      throw error;
-    }
-
-    return Boolean(data && data.length > 0);
-  } catch (error) {
-    const message = getErrorMessage(
-      error,
-      "Falha ao validar a role admin em public.user_roles.",
-    );
-
-    throw new Error(
-      `Falha ao validar acesso administrativo em public.user_roles. Verifique se o usuario autenticado possui a role admin. Detalhe: ${message}`,
-    );
-  }
-}
 
 export function ClinicAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -74,7 +49,7 @@ export function ClinicAuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
 
     try {
-      const admin = await resolveAdminRole(nextSession.user.id);
+      const admin = await resolveAdminRole(nextSession.user);
       setIsAdmin(admin);
       return admin;
     } finally {
@@ -86,15 +61,25 @@ export function ClinicAuthProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     const bootstrap = async () => {
-      const {
-        data: { session: existingSession },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session: existingSession },
+        } = await supabase.auth.getSession();
 
-      if (!active) {
-        return;
+        if (!active) {
+          return;
+        }
+
+        await syncSession(existingSession);
+      } catch (error) {
+        console.error(getErrorMessage(error, "Falha ao carregar a sessao inicial."));
+        if (active) {
+          setSession(null);
+          setUser(null);
+          setIsAdmin(false);
+          setIsLoading(false);
+        }
       }
-
-      await syncSession(existingSession);
     };
 
     void bootstrap();
@@ -112,34 +97,26 @@ export function ClinicAuthProvider({ children }: { children: ReactNode }) {
   }, [syncSession]);
 
   const refreshRole = useCallback(async () => {
-    const admin = await resolveAdminRole(user?.id ?? null);
+    const admin = await resolveAdminRole(user);
     setIsAdmin(admin);
     return admin;
-  }, [user?.id]);
+  }, [user]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
       setIsLoading(true);
 
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        const admin = await resolveAdminRole(data.user.id);
+        const { session: nextSession, user: nextUser } = await signInClinicAdmin(email, password);
+        const admin = await resolveAdminRole(nextUser);
 
         if (!admin) {
-          await supabase.auth.signOut();
+          await signOutClinicAdmin();
           throw new Error("Sua conta nao possui acesso de administrador.");
         }
 
-        setSession(data.session);
-        setUser(data.user);
+        setSession(nextSession);
+        setUser(nextUser);
         setIsAdmin(true);
       } finally {
         setIsLoading(false);
@@ -152,11 +129,7 @@ export function ClinicAuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        throw error;
-      }
+      await signOutClinicAdmin();
 
       setSession(null);
       setUser(null);
@@ -238,7 +211,7 @@ export function AccessDeniedState() {
         </div>
         <h1 className="text-2xl font-bold font-headline">Acesso administrativo necessario</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Esta conta nao possui a role <code>admin</code> em <code>public.user_roles</code>.
+          Esta conta nao possui a role <code>admin</code> na base de autenticacao ativa.
         </p>
       </div>
     </div>

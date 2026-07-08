@@ -33,6 +33,7 @@ import {
   TRATAMENTO_STATUS,
   type CreateTratamentoInput,
   type TratamentoRecord,
+  type TratamentoStatusType,
 } from "@/features/prontuarios/types";
 
 export interface TratamentoSectionProps {
@@ -118,7 +119,7 @@ export function TratamentoSection({
         paciente_id: pacienteId,
         dente_numero: form.dente_numero || null,
         procedimento_descricao: form.procedimento_descricao.trim(),
-        status: form.status as any,
+        status: form.status as TratamentoStatusType,
         data_diagnostico: form.data_diagnostico || null,
         data_orcamento: form.data_orcamento || null,
         data_prevista: form.data_prevista || null,
