@@ -33,11 +33,17 @@ export interface ProntuarioRecord {
 export interface TratamentoRecord {
   id: string;
   prontuario_id: string;
+  paciente_id?: string | null;
   dente_numero?: number | null;
   servico_id?: string | null;
   servico_nome?: string | null;
+  procedimento_descricao?: string | null;
   status: TratamentoStatusType;
   orcamento?: number | null;
+  data_diagnostico?: string | null;
+  data_orcamento?: string | null;
+  data_prevista?: string | null;
+  num_sessoes_total?: number | null;
   num_sessoes_estimadas?: number | null;
   num_sessoes_realizadas?: number | null;
   notas_sessao?: string | null;

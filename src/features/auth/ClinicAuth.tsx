@@ -7,122 +7,119 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Session, User } from "@supabase/supabase-js";
 import { Navigate, useLocation } from "react-router-dom";
 import { Loader2, ShieldAlert } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { getErrorMessage } from "@/lib/errors";
-import {
-  resolveAdminRole,
-  signInClinicAdmin,
-  signOutClinicAdmin,
-} from "./clinic-auth-service";
+import { setClinicAuthToken } from "@/lib/api";
+import type { ClinicUser } from "@/features/integrations/dental-api";
+import { signInClinicAdmin, signOutClinicAdmin } from "./clinic-auth-service";
+
+type ClinicSession = {
+  clinic: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  token: string;
+  user: ClinicUser;
+};
+
+type StoredClinicSession = ClinicSession & {
+  isAdmin: boolean;
+};
 
 type ClinicAuthContextValue = {
+  clinic: ClinicSession["clinic"] | null;
   isAdmin: boolean;
   isLoading: boolean;
-  session: Session | null;
-  user: User | null;
+  session: ClinicSession | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  refreshRole: () => Promise<boolean>;
+  user: ClinicUser | null;
 };
 
 const ClinicAuthContext = createContext<ClinicAuthContextValue | null>(null);
+const STORAGE_KEY = "dental-aura:clinic-session";
+
+function readStoredSession(): StoredClinicSession | null {
+  if (typeof window === "undefined") return null;
+
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as StoredClinicSession;
+    if (!parsed?.token || !parsed?.user?.id || !parsed?.clinic?.id) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function storeSession(value: StoredClinicSession | null) {
+  if (typeof window === "undefined") return;
+
+  if (!value) {
+    window.localStorage.removeItem(STORAGE_KEY);
+    setClinicAuthToken(null);
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+  setClinicAuthToken(value.token);
+}
 
 export function ClinicAuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<ClinicSession | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const syncSession = useCallback(async (nextSession: Session | null) => {
-    setSession(nextSession);
-    setUser(nextSession?.user ?? null);
-
-    if (!nextSession?.user) {
-      setIsAdmin(false);
-      setIsLoading(false);
-      return false;
+  const syncSession = useCallback(async (nextSession: StoredClinicSession | null) => {
+    setSession(
+      nextSession
+        ? {
+            clinic: nextSession.clinic,
+            token: nextSession.token,
+            user: nextSession.user,
+          }
+        : null,
+    );
+    setIsAdmin(Boolean(nextSession?.isAdmin));
+    setIsLoading(false);
+    if (nextSession?.token) {
+      setClinicAuthToken(nextSession.token);
     }
-
-    setIsLoading(true);
-
-    try {
-      const admin = await resolveAdminRole(nextSession.user);
-      setIsAdmin(admin);
-      return admin;
-    } finally {
-      setIsLoading(false);
-    }
+    return Boolean(nextSession?.isAdmin);
   }, []);
 
   useEffect(() => {
-    let active = true;
-
-    const bootstrap = async () => {
-      try {
-        const {
-          data: { session: existingSession },
-        } = await supabase.auth.getSession();
-
-        if (!active) {
-          return;
-        }
-
-        await syncSession(existingSession);
-      } catch (error) {
-        console.error(getErrorMessage(error, "Falha ao carregar a sessao inicial."));
-        if (active) {
-          setSession(null);
-          setUser(null);
-          setIsAdmin(false);
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void bootstrap();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void syncSession(nextSession);
-    });
-
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-    };
+    void syncSession(readStoredSession());
   }, [syncSession]);
-
-  const refreshRole = useCallback(async () => {
-    const admin = await resolveAdminRole(user);
-    setIsAdmin(admin);
-    return admin;
-  }, [user]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
       setIsLoading(true);
 
       try {
-        const { session: nextSession, user: nextUser } = await signInClinicAdmin(email, password);
-        const admin = await resolveAdminRole(nextUser);
+        const result = await signInClinicAdmin(email, password);
 
-        if (!admin) {
-          await signOutClinicAdmin();
-          throw new Error("Sua conta nao possui acesso de administrador.");
+        if (!result.isAdmin) {
+          throw new Error("Sua conta nao possui acesso de administrador da clinica.");
         }
 
-        setSession(nextSession);
-        setUser(nextUser);
-        setIsAdmin(true);
+        const nextSession: StoredClinicSession = {
+          clinic: result.clinic,
+          isAdmin: true,
+          token: result.token,
+          user: result.user,
+        };
+
+        storeSession(nextSession);
+        await syncSession(nextSession);
       } finally {
         setIsLoading(false);
       }
     },
-    [],
+    [syncSession],
   );
 
   const signOut = useCallback(async () => {
@@ -130,26 +127,24 @@ export function ClinicAuthProvider({ children }: { children: ReactNode }) {
 
     try {
       await signOutClinicAdmin();
-
-      setSession(null);
-      setUser(null);
-      setIsAdmin(false);
+      storeSession(null);
+      await syncSession(null);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [syncSession]);
 
   const value = useMemo(
     () => ({
+      clinic: session?.clinic ?? null,
       isAdmin,
       isLoading,
       session,
-      user,
       signIn,
       signOut,
-      refreshRole,
+      user: session?.user ?? null,
     }),
-    [isAdmin, isLoading, refreshRole, session, signIn, signOut, user],
+    [isAdmin, isLoading, session, signIn, signOut],
   );
 
   return <ClinicAuthContext.Provider value={value}>{children}</ClinicAuthContext.Provider>;
@@ -174,14 +169,14 @@ function AuthLoadingState() {
         </div>
         <h1 className="text-xl font-bold font-headline">Carregando painel</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Validando sua sessao e as permissoes de administrador.
+          Validando sua sessao e a clinica vinculada.
         </p>
       </div>
     </div>
   );
 }
 
-export function RequireAdmin({ children }: { children: ReactNode }) {
+export function RequireClinicAdmin({ children }: { children: ReactNode }) {
   const { isAdmin, isLoading, session } = useClinicAuth();
   const location = useLocation();
 
@@ -202,6 +197,8 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+export const RequireAdmin = RequireClinicAdmin;
+
 export function AccessDeniedState() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
@@ -211,7 +208,7 @@ export function AccessDeniedState() {
         </div>
         <h1 className="text-2xl font-bold font-headline">Acesso administrativo necessario</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Esta conta nao possui a role <code>admin</code> na base de autenticacao ativa.
+          Esta conta nao possui permissao administrativa para a clinica selecionada.
         </p>
       </div>
     </div>

@@ -1,0 +1,192 @@
+{
+  "name": "Login Admin Clinica v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clinica-admin-login",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-admin-login",
+      "name": "Receber login admin",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        40
+      ],
+      "webhookId": "clinica-admin-login-v1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\n\nfunction requiredString(value, field) {\n  const text = String(value ?? '').trim();\n  if (!text) {\n    throw new Error(`Campo obrigatorio ausente: ${field}`);\n  }\n  return text;\n}\n\nfunction optionalString(value) {\n  const text = String(value ?? '').trim();\n  return text || null;\n}\n\nconst email = requiredString(body.email, 'email').toLowerCase();\nconst password = requiredString(body.password, 'password');\n\nreturn [{\n  json: {\n    app: optionalString(body.app) ?? 'dental-aura-clinic',\n    email,\n    password,\n    source: optionalString(body.source) ?? 'admin_login'\n  }\n}];"
+      },
+      "id": "code-normalizar-login",
+      "name": "Normalizar credenciais",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -760,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL + '/auth/v1/token?grant_type=password' }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ { \"apikey\": $env.SUPABASE_ANON_KEY, \"Authorization\": \"Bearer \" + $env.SUPABASE_ANON_KEY, \"Content-Type\": \"application/json\" } }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { email: $json.email, password: $json.password } }}"
+      },
+      "id": "http-auth-supabase",
+      "name": "Autenticar no Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -460,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const auth = $json;\nconst input = $('Normalizar credenciais').first().json;\n\nif (!auth?.access_token || !auth?.refresh_token) {\n  throw new Error('A autenticacao nao retornou access_token e refresh_token.');\n}\n\nconst filters = [];\n\nif (auth.user?.id) {\n  filters.push(`supabase_user_id.eq.${auth.user.id}`);\n}\n\nif (auth.user?.email) {\n  filters.push(`email.eq.${auth.user.email}`);\n}\n\nif (!filters.length) {\n  throw new Error('A autenticacao nao retornou identificadores para validar a role admin.');\n}\n\nconst orFilter = encodeURIComponent(`(${filters.join(',')})`);\nconst roleQueryUrl = `${$env.SUPABASE_URL}/rest/v1/access_roles?select=id&active=eq.true&role=eq.admin&or=${orFilter}&limit=1`;\n\nreturn [{\n  json: {\n    app: input.app,\n    email: input.email,\n    role_query_url: roleQueryUrl,\n    session: {\n      access_token: auth.access_token,\n      expires_at: auth.expires_at ?? null,\n      expires_in: auth.expires_in ?? null,\n      refresh_token: auth.refresh_token,\n      token_type: auth.token_type ?? 'bearer',\n      user: auth.user ?? null\n    },\n    source: input.source,\n    user: auth.user ?? null\n  }\n}];"
+      },
+      "id": "code-preparar-role",
+      "name": "Preparar validacao admin",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.role_query_url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ { \"apikey\": $env.SUPABASE_SERVICE_ROLE_KEY, \"Authorization\": \"Bearer \" + $env.SUPABASE_SERVICE_ROLE_KEY, \"Content-Type\": \"application/json\", \"Accept-Profile\": \"clinic\", \"Content-Profile\": \"clinic\" } }}"
+      },
+      "id": "http-validar-role",
+      "name": "Validar role admin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const roleRows = Array.isArray($json) ? $json : [];\nconst auth = $('Preparar validacao admin').first().json;\n\nif (!roleRows.length) {\n  throw new Error('Sua conta nao possui role admin na base de autenticacao ativa.');\n}\n\nreturn [{\n  json: {\n    ok: true,\n    source: 'n8n',\n    app: auth.app,\n    email: auth.email,\n    session: auth.session,\n    user: auth.user\n  }\n}];"
+      },
+      "id": "code-montar-login",
+      "name": "Montar resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-login",
+      "name": "Responder webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        740,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Receber login admin": {
+      "main": [
+        [
+          {
+            "node": "Normalizar credenciais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar credenciais": {
+      "main": [
+        [
+          {
+            "node": "Autenticar no Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar no Supabase": {
+      "main": [
+        [
+          {
+            "node": "Preparar validacao admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar validacao admin": {
+      "main": [
+        [
+          {
+            "node": "Validar role admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar role admin": {
+      "main": [
+        [
+          {
+            "node": "Montar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar resposta": {
+      "main": [
+        [
+          {
+            "node": "Responder webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "clinica-admin-login-v1",
+  "active": false,
+  "id": "clinica-admin-login-v1",
+  "tags": []
+}

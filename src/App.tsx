@@ -4,7 +4,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ClinicAuthProvider, RequireAdmin } from "@/features/auth/ClinicAuth";
+import { ClinicAuthProvider, RequireClinicAdmin } from "@/features/auth/ClinicAuth";
+import { PlatformAuthProvider, RequirePlatformAdmin } from "@/features/auth/PlatformAuth";
 import { queryClient } from "@/lib/react-query";
 
 const routerFuture = {
@@ -18,6 +19,8 @@ const AdminLayout = lazy(() => import("./components/admin/AdminLayout.tsx"));
 const Agenda = lazy(() => import("./pages/admin/Agenda.tsx"));
 const Overview = lazy(() => import("./pages/admin/Overview.tsx"));
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin.tsx"));
+const PlatformLogin = lazy(() => import("./pages/platform/PlatformLogin.tsx"));
+const PlatformClinics = lazy(() => import("./pages/platform/Clinics.tsx"));
 const Pacientes = lazy(() => import("./pages/admin/Pacientes.tsx"));
 const PacienteDetalhes = lazy(() =>
   import("./pages/admin/PacienteDetalhes.tsx").then((module) => ({
@@ -38,36 +41,55 @@ const RouteLoader = () => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ClinicAuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter future={routerFuture}>
-          <Suspense fallback={<RouteLoader />}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route
-                path="/admin"
-                element={
-                  <RequireAdmin>
-                    <AdminLayout />
-                  </RequireAdmin>
-                }
-              >
-                <Route index element={<Overview />} />
-                <Route path="agenda" element={<Agenda />} />
-                <Route path="pacientes" element={<Pacientes />} />
-                <Route path="pacientes/:pacienteId" element={<PacienteDetalhes />} />
-                <Route path="solicitacoes" element={<Solicitacoes />} />
-                <Route path="profissionais" element={<Profissionais />} />
-                <Route path="servicos" element={<Servicos />} />
-                <Route path="financeiro" element={<Financeiro />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
+      <PlatformAuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter future={routerFuture}>
+            <Suspense fallback={<RouteLoader />}>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/platform/login" element={<PlatformLogin />} />
+                <Route
+                  path="/platform"
+                  element={
+                    <RequirePlatformAdmin>
+                      <PlatformClinics />
+                    </RequirePlatformAdmin>
+                  }
+                />
+                <Route
+                  path="/platform/clinics"
+                  element={
+                    <RequirePlatformAdmin>
+                      <PlatformClinics />
+                    </RequirePlatformAdmin>
+                  }
+                />
+                <Route
+                  path="/admin"
+                  element={
+                    <RequireClinicAdmin>
+                      <AdminLayout />
+                    </RequireClinicAdmin>
+                  }
+                >
+                  <Route index element={<Overview />} />
+                  <Route path="agenda" element={<Agenda />} />
+                  <Route path="pacientes" element={<Pacientes />} />
+                  <Route path="pacientes/:pacienteId" element={<PacienteDetalhes />} />
+                  <Route path="solicitacoes" element={<Solicitacoes />} />
+                  <Route path="profissionais" element={<Profissionais />} />
+                  <Route path="servicos" element={<Servicos />} />
+                  <Route path="financeiro" element={<Financeiro />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </TooltipProvider>
+      </PlatformAuthProvider>
     </ClinicAuthProvider>
   </QueryClientProvider>
 );

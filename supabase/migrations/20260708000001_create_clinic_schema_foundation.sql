@@ -2,6 +2,14 @@
 -- Clinic schema foundation for the n8n migration
 -- ============================================================================
 
+do $$
+begin
+  if not exists (select 1 from pg_namespace where nspname = 'auth') then
+    raise exception 'Esta migration e exclusiva do Supabase e depende do schema auth. Para o PostgreSQL dedicado do Dental Aura, rode n8n/dental/00-infra/dental-aura-postgres-schema.sql.';
+  end if;
+end;
+$$;
+
 create schema if not exists clinic;
 
 create or replace function clinic.touch_updated_at()

@@ -1,125 +1,44 @@
 import { Route, Routes } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ClinicAuthProvider, RequireAdmin } from "@/features/auth/ClinicAuth";
+import { ClinicAuthProvider, RequireAdmin, useClinicAuth } from "@/features/auth/ClinicAuth";
 import { TestMemoryRouter } from "@/test/router";
 
-const {
-  clinicAfterActiveMock,
-  clinicAwaitableMock,
-  clinicFromMock,
-  clinicRoleQueryMock,
-  clinicSchemaMock,
-  getSessionMock,
-  limitMock,
-  onAuthStateChangeMock,
-  roleEqMock,
-  selectMock,
-  userEqMock,
-  publicFromMock,
-} = vi.hoisted(() => {
-  const clinicAfterActiveMock = { eq: vi.fn() };
-  const clinicAwaitableMock = { eq: vi.fn(), then: vi.fn() };
-  const clinicRoleQueryMock = { eq: vi.fn(), limit: vi.fn() };
+const fetchMock = vi.fn();
+const storage = (() => {
+  const store = new Map<string, string>();
 
   return {
-    clinicAfterActiveMock,
-    clinicAwaitableMock,
-    clinicFromMock: vi.fn(),
-    clinicRoleQueryMock,
-    clinicSchemaMock: vi.fn(),
-    getSessionMock: vi.fn(),
-    limitMock: vi.fn(),
-    onAuthStateChangeMock: vi.fn(),
-    publicFromMock: vi.fn(),
-    roleEqMock: vi.fn(),
-    selectMock: vi.fn(),
-    userEqMock: vi.fn(),
-  };
-});
-
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: {
-      getSession: getSessionMock,
-      onAuthStateChange: onAuthStateChangeMock,
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
+    clear: () => store.clear(),
+    getItem: (key: string) => store.get(key) ?? null,
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
     },
-    from: publicFromMock,
-    schema: clinicSchemaMock,
-  },
-}));
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+  };
+})();
+
+vi.stubGlobal("fetch", fetchMock);
+vi.stubGlobal("localStorage", storage);
+Object.defineProperty(window, "localStorage", {
+  configurable: true,
+  value: storage,
+});
 
 describe("Clinic auth routing", () => {
   beforeEach(() => {
-    publicFromMock.mockReset();
-    clinicSchemaMock.mockReset();
-    clinicFromMock.mockReset();
-    getSessionMock.mockReset();
-    onAuthStateChangeMock.mockReset();
-    limitMock.mockReset();
-    roleEqMock.mockReset();
-    selectMock.mockReset();
-    userEqMock.mockReset();
-    clinicAfterActiveMock.eq.mockReset();
-    clinicAwaitableMock.eq.mockReset();
-    clinicAwaitableMock.then.mockReset();
-    clinicRoleQueryMock.eq.mockReset();
-    clinicRoleQueryMock.limit.mockReset();
-
-    onAuthStateChangeMock.mockReturnValue({
-      data: {
-        subscription: {
-          unsubscribe: vi.fn(),
-        },
-      },
-    });
-
-    publicFromMock.mockReturnValue({
-      select: selectMock,
-    });
-    selectMock.mockReturnValue({
-      eq: userEqMock,
-    });
-    userEqMock.mockReturnValue({
-      eq: roleEqMock,
-    });
-    roleEqMock.mockReturnValue({
-      limit: limitMock,
-    });
-    limitMock.mockResolvedValue({
-      data: [],
-      error: null,
-    });
-
-    clinicSchemaMock.mockReturnValue({
-      from: clinicFromMock,
-    });
-    clinicFromMock.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue(clinicAfterActiveMock),
-      }),
-    });
-    clinicAfterActiveMock.eq.mockReturnValue(clinicRoleQueryMock);
-    clinicRoleQueryMock.eq.mockReturnValue(clinicRoleQueryMock);
-    clinicRoleQueryMock.limit.mockReturnValue(clinicAwaitableMock);
-    clinicAwaitableMock.eq.mockReturnValue(clinicAwaitableMock);
-    clinicAwaitableMock.then.mockImplementation((resolve) =>
-      resolve({
-        data: [],
-        error: null,
-      }),
-    );
+    fetchMock.mockReset();
+    storage.clear();
+    vi.unstubAllEnvs();
   });
 
   it("redirects unauthenticated users to /admin/login", async () => {
-    getSessionMock.mockResolvedValue({
-      data: {
-        session: null,
-      },
-    });
-
     render(
       <TestMemoryRouter initialEntries={["/admin/solicitacoes"]}>
         <ClinicAuthProvider>
@@ -143,31 +62,27 @@ describe("Clinic auth routing", () => {
     });
   });
 
-  it("allows admin sessions to access protected routes", async () => {
-    getSessionMock.mockResolvedValue({
-      data: {
-        session: {
-          access_token: "token",
-          expires_at: 999999,
-          expires_in: 3600,
-          refresh_token: "refresh",
-          token_type: "bearer",
-          user: {
-            app_metadata: {},
-            aud: "authenticated",
-            created_at: "2026-04-03T12:00:00.000Z",
-            email: "admin@clinica.com",
-            id: "user-1",
-            role: "authenticated",
-            user_metadata: {},
-          },
+  it("allows stored admin sessions to access protected routes", async () => {
+    window.localStorage.setItem(
+      "dental-aura:clinic-session",
+      JSON.stringify({
+        clinic: {
+          id: "clinic-1",
+          name: "Clinica Teste",
+          slug: "clinica-teste",
         },
-      },
-    });
-    limitMock.mockResolvedValue({
-      data: [{ id: "role-1" }],
-      error: null,
-    });
+        isAdmin: true,
+        token: "token",
+        user: {
+          clinic_id: "clinic-1",
+          clinic_name: "Clinica Teste",
+          clinic_slug: "clinica-teste",
+          email: "admin@clinica.com",
+          id: "user-1",
+          role: "clinic_admin",
+        },
+      }),
+    );
 
     render(
       <TestMemoryRouter initialEntries={["/admin/solicitacoes"]}>
@@ -192,56 +107,67 @@ describe("Clinic auth routing", () => {
     });
   });
 
-  it("treats role lookup failures as non-admin access", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  it("signs in via n8n and stores the session locally", async () => {
+    vi.stubEnv("VITE_DENTAL_AURA_API_BASE_URL", "https://n8n.example/webhook");
 
-    getSessionMock.mockResolvedValue({
-      data: {
-        session: {
-          access_token: "token",
-          expires_at: 999999,
-          expires_in: 3600,
-          refresh_token: "refresh",
-          token_type: "bearer",
-          user: {
-            app_metadata: {},
-            aud: "authenticated",
-            created_at: "2026-04-03T12:00:00.000Z",
-            email: "admin@clinica.com",
-            id: "user-1",
-            role: "authenticated",
-            user_metadata: {},
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            clinic: {
+              id: "clinic-1",
+              name: "Clinica Teste",
+              slug: "clinica-teste",
+            },
+            token: "token",
+            user: {
+              clinic_id: "clinic-1",
+              clinic_name: "Clinica Teste",
+              clinic_slug: "clinica-teste",
+              email: "admin@clinica.com",
+              id: "user-1",
+              role: "clinic_admin",
+            },
           },
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          status: 200,
         },
-      },
-    });
-    limitMock.mockResolvedValue({
-      data: null,
-      error: { message: "RLS denied" },
-    });
+      ),
+    );
 
     render(
-      <TestMemoryRouter initialEntries={["/admin/solicitacoes"]}>
+      <TestMemoryRouter initialEntries={["/admin/login"]}>
         <ClinicAuthProvider>
           <Routes>
-            <Route path="/admin/login" element={<div>PAGINA LOGIN</div>} />
-            <Route
-              path="/admin/solicitacoes"
-              element={
-                <RequireAdmin>
-                  <div>AREA ADMIN</div>
-                </RequireAdmin>
-              }
-            />
+            <Route path="/admin/login" element={<LoginProbe />} />
           </Routes>
         </ClinicAuthProvider>
       </TestMemoryRouter>,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "login" }));
+
     await waitFor(() => {
-      expect(screen.getByText("PAGINA LOGIN")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "admin" })).toBeInTheDocument();
     });
 
-    errorSpy.mockRestore();
+    expect(window.localStorage.getItem("dental-aura:clinic-session")).toContain(
+      "admin@clinica.com",
+    );
   });
 });
+
+function LoginProbe() {
+  const { isAdmin, signIn } = useClinicAuth();
+
+  return (
+    <button type="button" onClick={() => void signIn("admin@clinica.com", "123456")}>
+      {isAdmin ? "admin" : "login"}
+    </button>
+  );
+}

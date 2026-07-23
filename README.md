@@ -21,7 +21,22 @@ As migrations locais em `supabase/migrations` agora cobrem:
 - `atividades`
 - `user_roles`
 - `solicitacoes_agendamento`
+- `clinic.access_roles`
+- `clinic.prontuarios`
+- `clinic.tratamentos`
+- base financeira em `clinic` para `orcamentos`, `faturas`, `pagamentos` e cupons
 - RLS, policies e funcoes auxiliares
+
+Os workflows do n8n estao organizados em `n8n/dental`, com subpastas por dominio:
+
+- `admin`
+- `atendimentos`
+- `clientes`
+- `clinico`
+- `faturamento`
+- `integracoes`
+- `00-infra`
+- `arquivados`
 
 ## Rotas principais
 
@@ -42,15 +57,9 @@ insert into public.user_roles (user_id, role)
 values ('SEU-USER-ID', 'admin');
 ```
 
-4. O bridge de login via n8n tambem pode validar `clinic.access_roles` no schema novo. Durante a transicao, mantenha a role em `public.user_roles` para nao quebrar o acesso atual.
-
-```sql
-insert into clinic.access_roles (email, role, identity_provider)
-values ('admin@clinica.com', 'admin', 'n8n');
-```
-
-5. Configurar o n8n com `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
-6. Para habilitar login via n8n no painel, configurar `VITE_AUTH_PROVIDER=n8n` ou `hybrid` e `VITE_N8N_AUTH_URL` no frontend.
+4. O login administrativo agora e controlado pelo workflow do n8n e devolve sessao local com `is_admin`.
+5. Configurar o n8n com `VITE_N8N_AUTH_URL` e os endpoints de dominio que forem sendo ativados.
+6. Para implementar o login administrativo via n8n, use o workflow `n8n/dental/admin/ADMIN - login.json` e a documentacao `docs/n8n-login-admin-clinica-v1.md`.
 
 ## Dados de desenvolvimento
 
@@ -91,8 +100,10 @@ Documentacao complementar:
 
 - `docs/etapa-1-expansao-n8n-clinica.md`
 - `docs/n8n-atendimento-clinica-v1.md`
+- `docs/n8n-login-admin-clinica-v1.md`
 - `docs/PLANO_MIGRACAO_BACKEND_N8N.md`
 - `Atendimento Ajuste.json`
+- `Login Admin Ajuste.json`
 
 ## 🆕 Módulo Financeiro (v1.0)
 
@@ -106,6 +117,10 @@ O módulo financeiro de **gestão integrada de orçamentos, faturas, pagamentos 
 - ✅ Sistema de descontos com cupons
 - ✅ Relatórios avançados com 4 tipos diferentes
 - ✅ Exportação CSV de todos os relatórios
+
+Esta base já começou a ser migrada para o schema `clinic`, com fallback temporário para `public` enquanto a transição acontece.
+
+O mesmo caminho já foi iniciado para prontuários e tratamentos, com o front lendo `clinic` primeiro e voltando para `public` se necessário.
 
 ### Rotas & Abas
 

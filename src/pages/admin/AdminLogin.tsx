@@ -40,14 +40,14 @@ const AdminLogin = () => {
 
       toast({
         title: "Acesso liberado",
-        description: "Sessão administrativa iniciada com sucesso.",
+        description: "Sessao administrativa iniciada com sucesso.",
       });
 
       navigate(redirectTo, { replace: true });
     } catch (error) {
       const message = getErrorMessage(
         error,
-        "Não foi possível iniciar a sessão administrativa.",
+        "Nao foi possivel iniciar a sessao administrativa.",
       );
 
       setSubmitError(message);
@@ -65,25 +65,28 @@ const AdminLogin = () => {
         <div className="hidden rounded-[2rem] border border-border/60 bg-card/80 p-10 shadow-card backdrop-blur lg:block">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-accent px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-primary">
             <ShieldCheck className="h-4 w-4" />
-            Painel odontológico
+            Painel odontologico
           </div>
           <h1 className="mt-8 max-w-xl text-5xl font-extrabold font-headline leading-tight text-foreground">
-            Operação da clínica com entrada por IA e validação humana.
+            Painel da clinica com backend n8n e dados isolados por tenant.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
-            Acesso restrito ao time administrativo para revisar solicitações, confirmar agendamentos e acompanhar a operação da agenda.
+            Acesso restrito ao time administrativo para revisar solicitacoes,
+            confirmar agendamentos e acompanhar apenas os dados da clinica vinculada.
           </p>
           <div className="mt-10 grid gap-4">
             <div className="rounded-2xl border border-border/60 bg-background/90 p-5">
               <p className="text-sm font-semibold text-foreground">Fluxo do MVP</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                WhatsApp ou n8n cria a solicitação, o admin valida os dados e só então nasce o agendamento oficial.
+                WhatsApp ou n8n cria a solicitacao no PostgreSQL da aplicacao, o admin valida
+                os dados e so entao nasce o agendamento oficial.
               </p>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-background/90 p-5">
-              <p className="text-sm font-semibold text-foreground">Segurança</p>
+          <div className="rounded-2xl border border-border/60 bg-background/90 p-5">
+              <p className="text-sm font-semibold text-foreground">Seguranca</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                O painel exige sessão no Supabase Auth e permissão <code>admin</code> em <code>public.user_roles</code>.
+                O painel exige token valido, permissao <code>clinic_admin</code> e
+                <code> clinic_id</code> resolvidos pelo workflow de login no n8n.
               </p>
             </div>
           </div>
@@ -96,7 +99,7 @@ const AdminLogin = () => {
             </div>
             <CardTitle className="text-3xl font-headline">Entrar no painel admin</CardTitle>
             <CardDescription>
-              Use sua conta do Supabase Auth com permissão administrativa para acessar o MVP da clínica.
+              Use sua conta vinculada a uma clinica para acessar o painel via n8n.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -138,11 +141,12 @@ const AdminLogin = () => {
             </form>
 
             <p className="mt-6 text-sm text-muted-foreground">
-              Se esta conta não entrar, verifique se o usuário possui a role <code>admin</code> na tabela <code>user_roles</code>.
+              Se esta conta nao entrar, verifique se o workflow retornou token,
+              <code> clinic_id</code> e role <code>clinic_admin</code>.
             </p>
 
             <Link className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" to="/">
-              Voltar para o site institucional
+              Voltar para o site
             </Link>
           </CardContent>
         </Card>

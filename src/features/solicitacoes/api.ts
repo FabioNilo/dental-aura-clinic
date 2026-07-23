@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import type { Tables } from "@/integrations/supabase/types";
+import { clinicApi } from "@/features/integrations/dental-api";
 import { getErrorMessage } from "@/lib/errors";
 import { queryPresets } from "@/lib/react-query";
 
@@ -230,11 +230,11 @@ function normalizeSolicitacaoRecord(record: SolicitacaoRawRecord) {
       typeof record.observacoes_cliente === "string" ? record.observacoes_cliente : null,
     origem: typeof record.origem === "string" ? record.origem : "manual",
     paciente_id: typeof record.paciente_id === "string" ? record.paciente_id : null,
-    payload_externo: record.payload_externo ?? null,
+    payload_externo: (record.payload_externo ?? null) as SolicitacaoRecord["payload_externo"],
     procedimento_nome:
       typeof record.procedimento_nome === "string" ? record.procedimento_nome : "Procedimento",
     profissional_id: typeof record.profissional_id === "string" ? record.profissional_id : null,
-    resumo_atendimento: record.resumo_atendimento ?? null,
+    resumo_atendimento: (record.resumo_atendimento ?? null) as SolicitacaoRecord["resumo_atendimento"],
     servico_id: typeof record.servico_id === "string" ? record.servico_id : null,
     status: typeof record.status === "string" ? record.status : "novo",
     telefone_cliente:
@@ -252,68 +252,16 @@ export function useSolicitacoesQuery(filters: SolicitacaoFilters) {
     ...queryPresets.search,
     queryKey: ["solicitacoes", filters],
     queryFn: async () => {
-      const from = (filters.page - 1) * filters.pageSize;
-      const to = from + filters.pageSize - 1;
-
-      let query = supabase
-        .from("solicitacoes_agendamento")
-        .select(SOLICITACOES_LIST_SELECT, { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(from, to);
-
-      if (filters.status !== "all") {
-        query = query.eq("status", filters.status);
-      }
-
-      const searchExpression = buildSearchExpression(filters.search);
-
-      if (searchExpression) {
-        query = query.or(searchExpression);
-      }
-
-      const { data, error, count } = await query;
-
-      if (error && isSchemaMismatchError(error)) {
-        let fallbackQuery = supabase
-          .from("solicitacoes_agendamento")
-          .select("*", { count: "exact" })
-          .order("created_at", { ascending: false })
-          .range(from, to);
-
-        if (filters.status !== "all") {
-          fallbackQuery = fallbackQuery.eq("status", filters.status);
-        }
-
-        let fallbackResult = await fallbackQuery;
-
-        if (fallbackResult.error && isSchemaMismatchError(fallbackResult.error)) {
-          fallbackResult = await supabase
-            .from("solicitacoes_agendamento")
-            .select("*", { count: "exact" })
-            .range(from, to);
-        }
-
-        if (fallbackResult.error) {
-          throw toQueryError(fallbackResult.error, "Nao foi possivel carregar as solicitacoes.");
-        }
-
-        return {
-          count: fallbackResult.count ?? 0,
-          items: (fallbackResult.data ?? []).map((item) =>
-            normalizeSolicitacaoRecord(item as SolicitacaoRawRecord),
-          ),
-          page: filters.page,
-          pageSize: filters.pageSize,
-        };
-      }
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel carregar as solicitacoes.");
-      }
+      const result = await clinicApi.requests.list<SolicitacaoRawRecord>({
+        page: filters.page,
+        pageSize: filters.pageSize,
+        search: filters.search,
+        status: filters.status === "all" ? undefined : filters.status,
+      });
 
       return {
-        count: count ?? 0,
-        items: (data ?? []).map((item) => normalizeSolicitacaoRecord(item as SolicitacaoRawRecord)),
+        count: result.count ?? 0,
+        items: result.items.map((item) => normalizeSolicitacaoRecord(item)),
         page: filters.page,
         pageSize: filters.pageSize,
       };
@@ -327,17 +275,7 @@ export function useProfissionaisOptions() {
     ...queryPresets.static,
     queryKey: ["profissionais-options"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profissionais")
-        .select("id, nome, especialidade")
-        .eq("ativo", true)
-        .order("nome", { ascending: true });
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel carregar os profissionais.");
-      }
-
-      return (data ?? []) as ProfissionalOption[];
+      return clinicApi.professionals.options<ProfissionalOption>();
     },
   });
 }
@@ -347,17 +285,7 @@ export function useServicosOptions() {
     ...queryPresets.static,
     queryKey: ["servicos-options"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("servicos")
-        .select("id, nome, duracao_minutos, preco")
-        .eq("ativo", true)
-        .order("nome", { ascending: true });
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel carregar os servicos.");
-      }
-
-      return (data ?? []) as ServicoOption[];
+      return clinicApi.services.options<ServicoOption>();
     },
   });
 }
@@ -368,31 +296,7 @@ export function useSolicitacaoById(solicitacaoId?: string | null) {
     enabled: Boolean(solicitacaoId),
     queryKey: ["solicitacao", solicitacaoId ?? null],
     queryFn: async () => {
-      const preferredResult = await supabase
-        .from("solicitacoes_agendamento")
-        .select(SOLICITACAO_DETAIL_SELECT_PREFERRED)
-        .eq("id", solicitacaoId!)
-        .maybeSingle();
-
-      if (!preferredResult.error) {
-        return (preferredResult.data ?? null) as SolicitacaoRecord | null;
-      }
-
-      if (!isSchemaMismatchError(preferredResult.error)) {
-        throw toQueryError(preferredResult.error, "Nao foi possivel carregar a solicitacao.");
-      }
-
-      const fallbackResult = await supabase
-        .from("solicitacoes_agendamento")
-        .select(SOLICITACAO_DETAIL_SELECT_FALLBACK)
-        .eq("id", solicitacaoId!)
-        .maybeSingle();
-
-      if (fallbackResult.error) {
-        throw toQueryError(fallbackResult.error, "Nao foi possivel carregar a solicitacao.");
-      }
-
-      return (fallbackResult.data ?? null) as SolicitacaoRecord | null;
+      return clinicApi.requests.byId<SolicitacaoRecord>(solicitacaoId!);
     },
   });
 }
@@ -403,20 +307,7 @@ export function useSolicitacaoVinculadaQuery(agendamentoId?: string | null) {
     enabled: Boolean(agendamentoId),
     queryKey: ["solicitacao-vinculada", agendamentoId ?? null],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("solicitacoes_agendamento")
-        .select(
-          "id, agendamento_id, codigo_externo, status, origem, canal_origem, procedimento_nome, dia_desejado, horario_desejado, data_hora_confirmada, observacoes_cliente, observacoes_admin, created_at",
-        )
-        .eq("agendamento_id", agendamentoId!)
-        .order("created_at", { ascending: false })
-        .maybeSingle();
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel carregar a solicitacao vinculada.");
-      }
-
-      return (data ?? null) as SolicitacaoLinkedRecord | null;
+      return clinicApi.requests.byAppointment<SolicitacaoLinkedRecord>(agendamentoId!);
     },
   });
 }
@@ -426,20 +317,13 @@ export function useConfirmarSolicitacao() {
 
   return useMutation({
     mutationFn: async (input: ConfirmarSolicitacaoInput) => {
-      const { data, error } = await supabase.rpc("confirmar_solicitacao_agendamento", {
-        p_data_hora: input.dataHora,
-        p_observacoes_admin: input.observacoesAdmin ?? null,
-        p_paciente_id: input.pacienteId ?? null,
-        p_profissional_id: input.profissionalId,
-        p_servico_id: input.servicoId,
-        p_solicitacao_id: input.solicitacaoId,
+      return clinicApi.requests.confirm(input.solicitacaoId, {
+        dataHora: input.dataHora,
+        observacoesAdmin: input.observacoesAdmin ?? null,
+        pacienteId: input.pacienteId ?? null,
+        profissionalId: input.profissionalId,
+        servicoId: input.servicoId,
       });
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel confirmar a solicitacao.");
-      }
-
-      return data;
     },
     onSuccess: async () => {
       await invalidateClinicData(queryClient);
@@ -463,7 +347,7 @@ export function useCreateSolicitacao() {
         tipo_atendimento: input.tipoAtendimento ?? null,
       };
 
-      const payload: TablesInsert<"solicitacoes_agendamento"> = {
+      const payload = {
         canal_origem: "painel_admin",
         dia_desejado: input.diaDesejado ?? null,
         horario_desejado: input.horarioDesejado ?? null,
@@ -482,17 +366,7 @@ export function useCreateSolicitacao() {
         tipo_atendimento: input.tipoAtendimento ?? null,
       };
 
-      const { data, error } = await supabase
-        .from("solicitacoes_agendamento")
-        .insert(payload)
-        .select("id, nome_cliente")
-        .single();
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel criar a solicitacao manual.");
-      }
-
-      return data as SolicitacaoRecord;
+      return clinicApi.requests.create<SolicitacaoRecord>(payload);
     },
     onSuccess: async () => {
       await invalidateClinicData(queryClient);
@@ -505,41 +379,13 @@ export function useRemarcarSolicitacao() {
 
   return useMutation({
     mutationFn: async (input: RemarcarSolicitacaoInput) => {
-      const nextPayload = {
-        p_data_hora: input.dataHora ?? null,
-        p_observacoes_admin: input.observacoesAdmin ?? null,
-        p_profissional_id: input.profissionalId ?? null,
-        p_servico_id: input.servicoId ?? null,
-        p_solicitacao_id: input.solicitacaoId,
-      };
-      const { data, error } = await supabase.rpc("remarcar_solicitacao_agendamento", nextPayload);
-
-      if (error && isRpcSignatureMismatch(error)) {
-        const hasNewFields = Boolean(input.dataHora || input.profissionalId || input.servicoId);
-
-        if (hasNewFields) {
-          throw new Error(
-            "A remarcacao com nova data, profissional ou servico precisa da RPC atualizada no Supabase. Aplique a migration 20260421000009_recreate_remarcacao_rpc_with_horario.sql.",
-          );
-        }
-
-        const legacyResult = await supabase.rpc("remarcar_solicitacao_agendamento", {
-          p_observacoes_admin: input.observacoesAdmin ?? null,
-          p_solicitacao_id: input.solicitacaoId,
-        });
-
-        if (legacyResult.error) {
-          throw toQueryError(legacyResult.error, "Nao foi possivel marcar a remarcacao.");
-        }
-
-        return legacyResult.data;
-      }
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel marcar a remarcacao.");
-      }
-
-      return data;
+      return clinicApi.requests.reschedule(input.solicitacaoId, {
+        confirmaAtualizacaoAgendamento: input.confirmaAtualizacaoAgendamento ?? false,
+        dataHora: input.dataHora ?? null,
+        observacoesAdmin: input.observacoesAdmin ?? null,
+        profissionalId: input.profissionalId ?? null,
+        servicoId: input.servicoId ?? null,
+      });
     },
     onSuccess: async () => {
       await invalidateClinicData(queryClient);
@@ -552,16 +398,9 @@ export function useCancelarSolicitacao() {
 
   return useMutation({
     mutationFn: async (input: AtualizarSolicitacaoInput) => {
-      const { data, error } = await supabase.rpc("cancelar_solicitacao_agendamento", {
-        p_observacoes_admin: input.observacoesAdmin ?? null,
-        p_solicitacao_id: input.solicitacaoId,
+      return clinicApi.requests.cancel(input.solicitacaoId, {
+        observacoesAdmin: input.observacoesAdmin ?? null,
       });
-
-      if (error) {
-        throw toQueryError(error, "Nao foi possivel cancelar a solicitacao.");
-      }
-
-      return data;
     },
     onSuccess: async () => {
       await invalidateClinicData(queryClient);

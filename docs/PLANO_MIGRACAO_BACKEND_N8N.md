@@ -17,15 +17,47 @@ Nesta fase, o foco e:
 O primeiro passo da migracao ja foi iniciado com:
 
 - bridge de login via n8n com fallback para Supabase
+- workflow de login administrativo via n8n
 - primeira migration do schema `clinic`
 - tabela `clinic.access_roles` para preparar a autenticacao fora do `public.user_roles`
 - tabelas operacionais iniciais para atender solicitacoes, conversas e integracoes
+- RPCs operacionais em `clinic` para confirmar, remarcar, cancelar e criar pacientes por telefone
+- base financeira em `clinic` com `orcamentos`, `orcamento_itens`, `faturas`, `fatura_itens`, `pagamentos`, `cupons_desconto` e `cupom_uso`
+- base clinica em `clinic` com `prontuarios` e `tratamentos`
+- helper de fallback no front para tentar `clinic` primeiro e manter compatibilidade com `public`
+
+### Estrutura de workflows no n8n
+
+A organizacao oficial dos workflows passa a ser:
+
+- `dental/00-infra`
+- `dental/clientes`
+- `dental/atendimentos`
+- `dental/clinico`
+- `dental/faturamento`
+- `dental/admin`
+- `dental/integracoes`
+- `dental/arquivados`
+
+O padrao de nomeacao de cada workflow fica:
+
+- `AREA - acao - v1`
+
+Os workflows ja prontos foram espelhados em:
+
+- `n8n/dental/admin/ADMIN - login.json`
+- `n8n/dental/atendimentos/ATD - captura whatsapp.json`
 
 O contrato do login via n8n precisa devolver uma sessao compatível com o cliente atual do Supabase, com pelo menos:
 
 - `access_token`
 - `refresh_token`
 - `user`
+
+O workflow de referencia ficou documentado em:
+
+- `Login Admin Ajuste.json`
+- `docs/n8n-login-admin-clinica-v1.md`
 
 ## Premissas
 
@@ -46,7 +78,7 @@ O projeto hoje ja possui estes dominios consolidados:
 O contrato atual do n8n ja aponta para:
 
 - localizar ou criar paciente pelo telefone
-- salvar solicitacao em `solicitacoes_agendamento`
+- salvar solicitacao em `clinic.solicitacoes_agendamento`
 - nao criar `agendamentos` automaticamente
 
 ## Proposta de schema proprio
@@ -519,19 +551,21 @@ Campos principais:
 
 ### Fase 3 - Clinico
 
-- criar `prontuarios`
-- criar `tratamentos`
-- adaptar o fluxo de confirmacao para usar o novo schema
+- consolidar `clinic.prontuarios` e `clinic.tratamentos`
+- adaptar os componentes de prontuario para ler e escrever no novo schema
+- manter fallback para `public` durante a transicao
 
 ### Fase 4 - Financeiro
 
-- criar ou mover `orcamentos`, `faturas`, `pagamentos` e itens
-- criar cupons e historico
-- migrar relatórios e views
+- consolidar `clinic.orcamentos`, `clinic.orcamento_itens`, `clinic.faturas`, `clinic.fatura_itens`, `clinic.pagamentos`, `clinic.cupons_desconto` e `clinic.cupom_uso`
+- garantir RPCs de resumo e devedores no novo schema
+- migrar relatórios e views com fallback temporario para `public`
+- validar permissões e RLS por perfil de acesso
 
 ### Fase 5 - Integração n8n
 
 - transformar insercoes diretas em workflows controlados
+- manter o login administrativo no n8n como primeira porta de entrada do painel
 - adicionar idempotencia com inbox/outbox
 - monitorar execucao de fluxos
 
@@ -550,6 +584,14 @@ O melhor caminho nao e reescrever tudo de uma vez. E:
 3. mover o n8n primeiro para escrita controlada
 4. migrar depois o frontend para o novo contrato
 5. remover o Supabase como dependencia primaria somente no final
+
+Estado atual:
+
+- login administrativo ja tem ponte n8n + Supabase
+- atendimento ja prioriza `clinic` com fallback
+- prontuario clinico ja prioriza `clinic` com fallback
+- financeiro ja prioriza `clinic` com fallback
+- o proximo corte seguro e ampliar escrita/leituras diretas do n8n para o novo schema
 
 ## Riscos principais
 

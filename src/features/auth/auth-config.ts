@@ -1,13 +1,7 @@
-export type AuthProviderMode = "supabase" | "n8n" | "hybrid";
+export type AuthProviderMode = "n8n";
 
-function normalizeAuthProvider(value: string | undefined | null): AuthProviderMode {
-  const normalized = value?.trim().toLowerCase();
-
-  if (normalized === "n8n" || normalized === "hybrid") {
-    return normalized;
-  }
-
-  return "supabase";
+function normalizeAuthProvider(_value: string | undefined | null): AuthProviderMode {
+  return "n8n";
 }
 
 export function getAuthProviderMode(): AuthProviderMode {
@@ -15,13 +9,18 @@ export function getAuthProviderMode(): AuthProviderMode {
 }
 
 export function getN8nAuthUrl() {
-  const value = import.meta.env.VITE_N8N_AUTH_URL?.trim();
+  const baseUrl =
+    import.meta.env.VITE_DENTAL_AURA_API_BASE_URL?.trim() ??
+    import.meta.env.VITE_DENTAL_AURA_WEBHOOK_BASE_URL?.trim() ??
+    import.meta.env.VITE_N8N_API_BASE_URL?.trim() ??
+    import.meta.env.VITE_N8N_BASE_URL?.trim();
+  const value = baseUrl ? `${baseUrl.replace(/\/$/, "")}/dental-aura/clinic/auth/login` : "";
 
   if (!value) {
     return "";
   }
 
-  return value.replace(/\/$/, "");
+  return value;
 }
 
 export function hasN8nAuthBridge() {

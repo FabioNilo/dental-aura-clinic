@@ -31,7 +31,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
 
 const AdminTopbar = () => {
   const location = useLocation();
-  const { user } = useClinicAuth();
+  const { clinic, user } = useClinicAuth();
   
   // Detectar se é rota de paciente detalhes
   const isPacienteDetalhes = location.pathname.match(/^\/admin\/pacientes\/[^/]+$/);
@@ -60,7 +60,7 @@ const AdminTopbar = () => {
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Painel odontologico
+              {clinic?.name ?? "Painel odontologico"}
             </p>
             <h2 className="mt-1 text-lg font-bold font-headline text-foreground sm:text-xl">{meta.title}</h2>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">{meta.subtitle}</p>
@@ -71,7 +71,7 @@ const AdminTopbar = () => {
           <div className="min-w-0 text-left lg:text-right">
             <p className="flex items-center gap-2 text-sm font-bold leading-tight text-foreground lg:justify-end">
               <ShieldCheck className="h-4 w-4 text-success" />
-              Administrador
+              Admin da clinica
             </p>
             <p className="truncate text-[11px] font-medium text-muted-foreground">{user?.email ?? "Sessao ativa"}</p>
           </div>

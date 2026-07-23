@@ -9,7 +9,7 @@ Ele deve:
 - receber a entrada do WhatsApp, chatbot ou frontend
 - normalizar nome e telefone
 - localizar ou criar o paciente pelo telefone
-- salvar uma solicitacao em `public.solicitacoes_agendamento`
+- salvar uma solicitacao em `clinic.solicitacoes_agendamento`
 - devolver o `codigo_externo` para rastreio
 
 Ele nao deve:
@@ -21,7 +21,12 @@ Ele nao deve:
 ## Variaveis esperadas no n8n
 
 - `SUPABASE_URL`
+- `SUPABASE_ANON_KEY` nao e necessario neste fluxo
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+## Local do workflow
+
+- `n8n/dental/atendimentos/ATD - captura whatsapp.json`
 
 ## Payload minimo de entrada
 
@@ -49,8 +54,8 @@ Ele nao deve:
 ## Passos do fluxo
 
 1. Validar `nome_cliente`, `telefone_cliente`, `procedimento_nome`, `dia_desejado` e `turno_desejado`.
-2. Chamar `public.upsert_paciente_por_telefone`.
-3. Inserir em `public.solicitacoes_agendamento` com:
+2. Chamar `clinic.upsert_paciente_por_telefone`.
+3. Inserir em `clinic.solicitacoes_agendamento` com:
    - `status = novo`
    - `origem = whatsapp` ou `site`
    - `canal_origem = n8n`
@@ -64,4 +69,5 @@ Ele nao deve:
 
 - `codigo_externo` pode ser enviado pelo n8n, mas o banco tambem gera automaticamente via trigger.
 - O fluxo ideal usa `service_role`, o que dispensa depender de policy publica para insercao.
-- O admin e quem faz a confirmacao final no painel, usando a RPC `confirmar_solicitacao_agendamento`.
+- O admin e quem faz a confirmacao final no painel, usando a RPC `clinic.confirmar_solicitacao_agendamento`.
+- Remarcacoes e cancelamentos tambem ja tem equivalentes em `clinic.remarcar_solicitacao_agendamento` e `clinic.cancelar_solicitacao_agendamento`.

@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import type { Tables } from "@/integrations/supabase/types";
+import { clinicApi } from "@/features/integrations/dental-api";
 import { queryPresets } from "@/lib/react-query";
 import type { PaginatedResult } from "@/types/api";
 
@@ -42,42 +42,12 @@ export function useServicosListQuery(filters: ServicosListFilters) {
     placeholderData: keepPreviousData,
     queryKey: ["servicos-list", filters],
     queryFn: async () => {
-      const from = (filters.page - 1) * filters.pageSize;
-      const to = from + filters.pageSize - 1;
-
-      let query = supabase
-        .from("servicos")
-        .select("id, nome, descricao, duracao_minutos, preco, ativo", { count: "exact" })
-        .order("ativo", { ascending: false })
-        .order("nome", { ascending: true })
-        .range(from, to);
-
-      if (filters.status === "active") {
-        query = query.eq("ativo", true);
-      }
-
-      if (filters.status === "inactive") {
-        query = query.eq("ativo", false);
-      }
-
-      const safeSearch = filters.search.trim().replace(/,/g, " ").replace(/\s+/g, " ");
-
-      if (safeSearch) {
-        query = query.or(`nome.ilike.%${safeSearch}%,descricao.ilike.%${safeSearch}%`);
-      }
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        throw error;
-      }
-
-      return {
-        count: count ?? 0,
-        items: (data ?? []) as ServicoListItem[],
+      return clinicApi.services.list<ServicoListItem>({
         page: filters.page,
         pageSize: filters.pageSize,
-      } satisfies PaginatedResult<ServicoListItem>;
+        search: filters.search,
+        status: filters.status,
+      }) as Promise<PaginatedResult<ServicoListItem>>;
     },
   });
 }
@@ -88,17 +58,7 @@ export function useServicoById(servicoId: string | null | undefined) {
     enabled: Boolean(servicoId),
     queryKey: ["servico", servicoId ?? null],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("servicos")
-        .select("id, nome, descricao, duracao_minutos, preco, ativo, created_at, updated_at")
-        .eq("id", servicoId!)
-        .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      return (data ?? null) as ServicoRecord | null;
+      return clinicApi.services.byId<ServicoRecord>(servicoId!);
     },
   });
 }
@@ -108,7 +68,7 @@ export function useCreateServico() {
 
   return useMutation({
     mutationFn: async (input: SaveServicoInput) => {
-      const payload: TablesInsert<"servicos"> = {
+      const payload = {
         ativo: input.ativo,
         descricao: input.descricao,
         duracao_minutos: input.duracao_minutos,
@@ -116,17 +76,7 @@ export function useCreateServico() {
         preco: input.preco,
       };
 
-      const { data, error } = await supabase
-        .from("servicos")
-        .insert(payload)
-        .select("id, nome, descricao, duracao_minutos, preco, ativo, created_at, updated_at")
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data as ServicoRecord;
+      return clinicApi.services.create<ServicoRecord>(payload);
     },
     onSuccess: async () => {
       await invalidateServicoData(queryClient);
@@ -143,7 +93,7 @@ export function useUpdateServico() {
         throw new Error("Servico sem ID para atualizacao.");
       }
 
-      const payload: TablesUpdate<"servicos"> = {
+      const payload = {
         ativo: input.ativo,
         descricao: input.descricao,
         duracao_minutos: input.duracao_minutos,
@@ -151,18 +101,7 @@ export function useUpdateServico() {
         preco: input.preco,
       };
 
-      const { data, error } = await supabase
-        .from("servicos")
-        .update(payload)
-        .eq("id", input.id)
-        .select("id, nome, descricao, duracao_minutos, preco, ativo, created_at, updated_at")
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data as ServicoRecord;
+      return clinicApi.services.update<ServicoRecord>(input.id, payload);
     },
     onSuccess: async () => {
       await invalidateServicoData(queryClient);

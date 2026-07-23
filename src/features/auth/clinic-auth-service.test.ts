@@ -1,64 +1,61 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { signInClinicAdmin } from "@/features/auth/clinic-auth-service";
 
-const { setSessionMock, signInWithPasswordMock } = vi.hoisted(() => ({
-  setSessionMock: vi.fn(),
-  signInWithPasswordMock: vi.fn(),
-}));
+const storage = (() => {
+  const store = new Map<string, string>();
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: {
-      setSession: setSessionMock,
-      signInWithPassword: signInWithPasswordMock,
+  return {
+    clear: () => store.clear(),
+    getItem: (key: string) => store.get(key) ?? null,
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
     },
-  },
-}));
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+  };
+})();
+
+vi.stubGlobal("localStorage", storage);
+Object.defineProperty(window, "localStorage", {
+  configurable: true,
+  value: storage,
+});
 
 describe("clinic-auth-service", () => {
   beforeEach(() => {
-    signInWithPasswordMock.mockReset();
-    setSessionMock.mockReset();
     vi.unstubAllEnvs();
     vi.stubGlobal("fetch", vi.fn());
+    storage.clear();
   });
 
-  it("authenticates with n8n when the provider is configured", async () => {
-    vi.stubEnv("VITE_AUTH_PROVIDER", "n8n");
-    vi.stubEnv("VITE_N8N_AUTH_URL", "https://n8n.example/webhook/admin-login");
-
-    const session = {
-      access_token: "token",
-      expires_at: 999999,
-      expires_in: 3600,
-      refresh_token: "refresh",
-      token_type: "bearer",
-      user: {
-        app_metadata: {},
-        aud: "authenticated",
-        created_at: "2026-04-03T12:00:00.000Z",
-        email: "admin@clinica.com",
-        id: "user-1",
-        role: "authenticated",
-        user_metadata: {},
-      },
-    };
-
-    setSessionMock.mockResolvedValue({
-      data: {
-        session,
-        user: session.user,
-      },
-      error: null,
-    });
+  it("authenticates with n8n and returns the clinic admin session", async () => {
+    vi.stubEnv("VITE_DENTAL_AURA_API_BASE_URL", "https://n8n.example/webhook");
 
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
-          session: {
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
+          success: true,
+          data: {
+            clinic: {
+              id: "clinic-1",
+              name: "Clinica Teste",
+              slug: "clinica-teste",
+            },
+            token: "token",
+            user: {
+              clinic_id: "clinic-1",
+              clinic_name: "Clinica Teste",
+              clinic_slug: "clinica-teste",
+              email: "admin@clinica.com",
+              id: "user-1",
+              role: "clinic_admin",
+            },
           },
         }),
         {
@@ -73,69 +70,26 @@ describe("clinic-auth-service", () => {
     const result = await signInClinicAdmin("admin@clinica.com", "123456");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://n8n.example/webhook/admin-login",
+      "https://n8n.example/webhook/dental-aura/clinic/auth/login",
       expect.objectContaining({
         body: JSON.stringify({
           app: "dental-aura-clinic",
           email: "admin@clinica.com",
           password: "123456",
-          source: "admin_login",
+          source: "clinic_login",
         }),
         method: "POST",
       }),
     );
-    expect(setSessionMock).toHaveBeenCalledWith({
-      access_token: "token",
-      refresh_token: "refresh",
-    });
     expect(result.source).toBe("n8n");
+    expect(result.isAdmin).toBe(true);
+    expect(result.clinic.id).toBe("clinic-1");
     expect(result.user.email).toBe("admin@clinica.com");
   });
 
-  it("falls back to Supabase when n8n is unavailable in hybrid mode", async () => {
-    vi.stubEnv("VITE_AUTH_PROVIDER", "hybrid");
-    vi.stubEnv("VITE_N8N_AUTH_URL", "https://n8n.example/webhook/admin-login");
-
-    const session = {
-      access_token: "token",
-      expires_at: 999999,
-      expires_in: 3600,
-      refresh_token: "refresh",
-      token_type: "bearer",
-      user: {
-        app_metadata: {},
-        aud: "authenticated",
-        created_at: "2026-04-03T12:00:00.000Z",
-        email: "admin@clinica.com",
-        id: "user-1",
-        role: "authenticated",
-        user_metadata: {},
-      },
-    };
-
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValue(
-      new Response("Gateway timeout", {
-        status: 504,
-        statusText: "Gateway Timeout",
-      }),
+  it("throws when the n8n base URL is missing", async () => {
+    await expect(signInClinicAdmin("admin@clinica.com", "123456")).rejects.toThrow(
+      "API n8n nao configurada.",
     );
-
-    signInWithPasswordMock.mockResolvedValue({
-      data: {
-        session,
-        user: session.user,
-      },
-      error: null,
-    });
-
-    const result = await signInClinicAdmin("admin@clinica.com", "123456");
-
-    expect(signInWithPasswordMock).toHaveBeenCalledWith({
-      email: "admin@clinica.com",
-      password: "123456",
-    });
-    expect(result.source).toBe("supabase");
-    expect(result.user.id).toBe("user-1");
   });
 });

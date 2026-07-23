@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import type { Tables } from "@/integrations/supabase/types";
+import { clinicApi } from "@/features/integrations/dental-api";
 import { queryPresets } from "@/lib/react-query";
 import type { PaginatedResult } from "@/types/api";
 
@@ -43,44 +43,12 @@ export function useProfissionaisListQuery(filters: ProfissionaisListFilters) {
     placeholderData: keepPreviousData,
     queryKey: ["profissionais-list", filters],
     queryFn: async () => {
-      const from = (filters.page - 1) * filters.pageSize;
-      const to = from + filters.pageSize - 1;
-
-      let query = supabase
-        .from("profissionais")
-        .select("id, nome, especialidade, cro, email, telefone, ativo", { count: "exact" })
-        .order("ativo", { ascending: false })
-        .order("nome", { ascending: true })
-        .range(from, to);
-
-      if (filters.status === "active") {
-        query = query.eq("ativo", true);
-      }
-
-      if (filters.status === "inactive") {
-        query = query.eq("ativo", false);
-      }
-
-      const safeSearch = filters.search.trim().replace(/,/g, " ").replace(/\s+/g, " ");
-
-      if (safeSearch) {
-        query = query.or(
-          `nome.ilike.%${safeSearch}%,especialidade.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,telefone.ilike.%${safeSearch}%,cro.ilike.%${safeSearch}%`,
-        );
-      }
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        throw error;
-      }
-
-      return {
-        count: count ?? 0,
-        items: (data ?? []) as ProfissionalListItem[],
+      return clinicApi.professionals.list<ProfissionalListItem>({
         page: filters.page,
         pageSize: filters.pageSize,
-      } satisfies PaginatedResult<ProfissionalListItem>;
+        search: filters.search,
+        status: filters.status,
+      }) as Promise<PaginatedResult<ProfissionalListItem>>;
     },
   });
 }
@@ -91,17 +59,7 @@ export function useProfissionalById(profissionalId: string | null | undefined) {
     enabled: Boolean(profissionalId),
     queryKey: ["profissional", profissionalId ?? null],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profissionais")
-        .select("id, nome, especialidade, cro, email, telefone, ativo, created_at, updated_at")
-        .eq("id", profissionalId!)
-        .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      return (data ?? null) as ProfissionalRecord | null;
+      return clinicApi.professionals.byId<ProfissionalRecord>(profissionalId!);
     },
   });
 }
@@ -111,7 +69,7 @@ export function useCreateProfissional() {
 
   return useMutation({
     mutationFn: async (input: SaveProfissionalInput) => {
-      const payload: TablesInsert<"profissionais"> = {
+      const payload = {
         ativo: input.ativo,
         cro: input.cro,
         email: input.email,
@@ -120,17 +78,7 @@ export function useCreateProfissional() {
         telefone: input.telefone,
       };
 
-      const { data, error } = await supabase
-        .from("profissionais")
-        .insert(payload)
-        .select("id, nome, especialidade, cro, email, telefone, ativo, created_at, updated_at")
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data as ProfissionalRecord;
+      return clinicApi.professionals.create<ProfissionalRecord>(payload);
     },
     onSuccess: async () => {
       await invalidateProfissionalData(queryClient);
@@ -147,7 +95,7 @@ export function useUpdateProfissional() {
         throw new Error("Profissional sem ID para atualizacao.");
       }
 
-      const payload: TablesUpdate<"profissionais"> = {
+      const payload = {
         ativo: input.ativo,
         cro: input.cro,
         email: input.email,
@@ -156,18 +104,7 @@ export function useUpdateProfissional() {
         telefone: input.telefone,
       };
 
-      const { data, error } = await supabase
-        .from("profissionais")
-        .update(payload)
-        .eq("id", input.id)
-        .select("id, nome, especialidade, cro, email, telefone, ativo, created_at, updated_at")
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data as ProfissionalRecord;
+      return clinicApi.professionals.update<ProfissionalRecord>(input.id, payload);
     },
     onSuccess: async () => {
       await invalidateProfissionalData(queryClient);

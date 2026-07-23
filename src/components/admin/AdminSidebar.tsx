@@ -29,14 +29,16 @@ const upcomingModules = [
 
 const AdminSidebar = () => {
   const location = useLocation();
-  const { signOut } = useClinicAuth();
+  const { clinic, signOut } = useClinicAuth();
 
   return (
     <aside className="border-b border-border/60 bg-background/85 backdrop-blur xl:fixed xl:inset-y-0 xl:left-0 xl:z-40 xl:w-72 xl:border-b-0 xl:border-r">
       <div className="mx-auto flex w-full max-w-[1720px] flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 xl:h-full xl:px-6 xl:py-6">
         <div className="px-1 xl:mb-6 xl:px-2">
-          <h1 className="text-xl font-black font-headline text-primary">Clinical Precision</h1>
-          <p className="text-xs font-medium text-muted-foreground">Painel administrativo MVP</p>
+          <h1 className="text-xl font-black font-headline text-primary">Dental Aura</h1>
+          <p className="text-xs font-medium text-muted-foreground">
+            {clinic?.name ?? "Painel da clinica"}
+          </p>
         </div>
 
         <nav className="flex gap-2 overflow-x-auto pb-1 xl:flex-1 xl:flex-col xl:gap-1 xl:overflow-visible xl:px-0 xl:pb-0">
