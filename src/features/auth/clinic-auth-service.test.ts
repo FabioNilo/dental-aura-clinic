@@ -88,8 +88,31 @@ describe("clinic-auth-service", () => {
   });
 
   it("throws when the n8n base URL is missing", async () => {
+    vi.stubEnv("VITE_DENTAL_AURA_API_BASE_URL", "");
+    vi.stubEnv("VITE_DENTAL_AURA_WEBHOOK_BASE_URL", "");
+    vi.stubEnv("VITE_N8N_API_BASE_URL", "");
+    vi.stubEnv("VITE_N8N_BASE_URL", "");
+
     await expect(signInClinicAdmin("admin@clinica.com", "123456")).rejects.toThrow(
       "API n8n nao configurada.",
+    );
+  });
+
+  it("explains when the configured API URL returns frontend HTML", async () => {
+    vi.stubEnv("VITE_DENTAL_AURA_API_BASE_URL", "https://elinethiago.lovable.app/webhook");
+
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue(
+      new Response("<!doctype html><html lang=\"pt-BR\"><head></head><body>SPA</body></html>", {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+        },
+        status: 200,
+      }),
+    );
+
+    await expect(signInClinicAdmin("admin@clinica.com", "123456")).rejects.toThrow(
+      "em producao use a URL absoluta do n8n com /webhook",
     );
   });
 });

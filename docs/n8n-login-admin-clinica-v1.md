@@ -66,6 +66,17 @@ POST /webhook/dental-aura/clinic/auth/login
 VITE_DENTAL_AURA_API_BASE_URL=https://SEU-N8N/webhook
 ```
 
+Em desenvolvimento local, o projeto pode usar `VITE_DENTAL_AURA_API_BASE_URL=/webhook`
+porque o Vite encaminha essa rota para o n8n via proxy. Em producao/Lovable, use
+uma URL absoluta, por exemplo:
+
+```text
+VITE_DENTAL_AURA_API_BASE_URL=https://yt-n8n.ftr0hc.easypanel.host/webhook
+```
+
+Se `/webhook` relativo for usado no deploy estatico, o browser chama o proprio frontend
+e a resposta tende a ser HTML da aplicacao, nao JSON do n8n.
+
 ## Referencia completa
 
 Veja `docs/n8n-postgres-saas-contract.md` e

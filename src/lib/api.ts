@@ -46,6 +46,27 @@ export function buildN8nUrl(path: string) {
   return `${baseUrl}${normalizedPath}`;
 }
 
+function isHtmlResponse(response: Response, rawBody: string) {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  const trimmedBody = rawBody.trim().toLowerCase();
+
+  return (
+    contentType.includes("text/html") ||
+    trimmedBody.startsWith("<!doctype html") ||
+    trimmedBody.startsWith("<html")
+  );
+}
+
+function getUnexpectedHtmlMessage(response: Response, path: string) {
+  const url = response.url || buildN8nUrl(path);
+
+  return (
+    `A API retornou HTML em ${url}. ` +
+    "Verifique VITE_DENTAL_AURA_API_BASE_URL: em producao use a URL absoluta do n8n com /webhook; " +
+    "/webhook relativo so funciona no dev server com proxy."
+  );
+}
+
 export const setClinicAuthToken = (token: string | null) => {
   if (token) {
     localStorage.setItem(CLINIC_TOKEN_STORAGE_KEY, token);
@@ -109,6 +130,10 @@ export async function requestJson<T>(
   const rawBody = await response.text();
 
   if (!response.ok) {
+    if (isHtmlResponse(response, rawBody)) {
+      throw new ApiError(getUnexpectedHtmlMessage(response, path), response.status);
+    }
+
     let message = rawBody;
 
     try {
@@ -133,6 +158,10 @@ export async function requestJson<T>(
       `A API respondeu sem JSON (${response.status}) em ${response.url || buildN8nUrl(path)}.`,
       response.status,
     );
+  }
+
+  if (isHtmlResponse(response, rawBody)) {
+    throw new ApiError(getUnexpectedHtmlMessage(response, path), response.status);
   }
 
   try {

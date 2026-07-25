@@ -4,29 +4,19 @@
 
 create extension if not exists pgcrypto;
 
-do $$
-begin
-  if to_regclass('dental_platform.clinics') is null
-    or to_regclass('dental_platform.platform_users') is null
-    or to_regclass('dental_clinic.users') is null then
-    raise exception
-      'Schema Dental Aura nao encontrado. Rode primeiro n8n/dental/00-infra/dental-aura-postgres-schema.sql no mesmo PostgreSQL dedicado.';
-  end if;
-end $$;
-
 with params as (
   select
     '00000000-0000-4000-8000-000000000001'::uuid as initial_clinic_id,
-    'Clinica inicial'::text as initial_clinic_name,
+    'Teste'::text as initial_clinic_name,
     'clinica-inicial'::text as initial_clinic_slug,
 
-    'platform@dental-aura.local'::text as platform_admin_email,
-    'Troque-Esta-Senha-Platform-2026!'::text as platform_admin_password,
-    'Platform Admin'::text as platform_admin_name,
+    'teste@gmail.com'::text as platform_admin_email,
+    '123456A*'::text as platform_admin_password,
+    'Teste'::text as platform_admin_name,
 
     'admin@clinica-inicial.local'::text as clinic_admin_email,
-    'Troque-Esta-Senha-Clinica-2026!'::text as clinic_admin_password,
-    'Admin Clinica Inicial'::text as clinic_admin_name
+    '123456A*'::text as clinic_admin_password,
+    'Teste'::text as clinic_admin_name
 ),
 upsert_clinic as (
   insert into dental_platform.clinics (

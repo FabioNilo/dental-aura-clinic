@@ -15,6 +15,11 @@ credencial de banco e nao consulta Supabase/PostgreSQL diretamente.
 VITE_DENTAL_AURA_API_BASE_URL=https://SEU-N8N/webhook
 ```
 
+Use `/webhook` relativo apenas no desenvolvimento local com o proxy do Vite ativo.
+Em producao/Lovable, configure uma URL absoluta do n8n, como
+`https://yt-n8n.ftr0hc.easypanel.host/webhook`; caso contrario, o deploy estatico pode
+responder HTML da propria aplicacao em vez de JSON do n8n.
+
 ## Autenticacao
 
 ### POST /dental-aura/clinic/auth/login
